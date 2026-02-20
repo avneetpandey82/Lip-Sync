@@ -51,13 +51,20 @@ export class AudioManager {
     source.buffer = audioBuffer;
     source.connect(this.audioContext.destination);
     
+    // Clear currentSource when audio ends
+    source.onended = () => {
+      if (this.currentSource === source) {
+        this.currentSource = null;
+        console.log('Audio playback ended');
+      }
+    };
+    
     // Track timing for lip-sync synchronization
     this.startTime = this.audioContext.currentTime;
+    this.currentSource = source;
     source.start(0);
     
-    this.currentSource = source;
-    
-    console.log(`Playing audio: ${audioBuffer.duration.toFixed(2)}s`);
+    console.log(`Playing audio: ${audioBuffer.duration.toFixed(2)}s, Start time: ${this.startTime.toFixed(2)}`);
   }
   
   /**
@@ -106,8 +113,15 @@ export class AudioManager {
       throw new Error('AudioContext not initialized');
     }
     
+    // Ensure byte length is multiple of 2 (16-bit = 2 bytes per sample)
+    let validData = pcmData;
+    if (pcmData.byteLength % 2 !== 0) {
+      console.warn(`PCM data has odd byte length (${pcmData.byteLength}), trimming last byte`);
+      validData = pcmData.slice(0, pcmData.byteLength - 1);
+    }
+    
     // Convert 16-bit PCM to float32 array
-    const pcm16 = new Int16Array(pcmData);
+    const pcm16 = new Int16Array(validData);
     const float32 = new Float32Array(pcm16.length);
     
     // Normalize 16-bit integers to [-1, 1] float range

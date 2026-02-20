@@ -1,30 +1,115 @@
 "use client";
 
-import { useState } from "react";
-import { AvatarScene } from "@/components/AvatarScene";
+import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useLipSync } from "@/hooks/useLipSync";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+
+// Dynamically import AvatarScene with no SSR to avoid React Three Fiber issues
+const AvatarScene = dynamic(
+  () => import("@/components/AvatarScene").then((mod) => mod.AvatarScene),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[600px] bg-gray-800 rounded-lg flex items-center justify-center">
+        <div className="text-gray-400">Loading 3D Avatar...</div>
+      </div>
+    )
+  }
+);
 
 export default function HomePage() {
+  const [mode, setMode] = useState<'text' | 'conversation'>('conversation');
   const [inputText, setInputText] = useState(
-    "Hello! I am your AI avatar powered by OpenAI text-to-speech and real-time lip synchronization.",
+    "Hello! I am your AI avatar. You can speak to me and I'll respond!",
   );
   const [selectedVoice, setSelectedVoice] = useState("coral");
   const [speed, setSpeed] = useState(1.0);
+  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const {
     currentViseme,
     isPlaying,
-    error,
+    error: lipSyncError,
     progress,
     speak,
     stop,
     replay,
     hasAudio,
   } = useLipSync();
+  
+  const {
+    transcript,
+    isListening,
+    isSupported: isSpeechSupported,
+    error: speechError,
+    startListening,
+    stopListening
+  } = useSpeechRecognition();
+  
+  const error = lipSyncError || speechError;
+
+  // Handle speech recognition result
+  useEffect(() => {
+    if (transcript && !isListening && mode === 'conversation') {
+      handleConversation(transcript);
+    }
+  }, [transcript, isListening, mode]);
 
   const handleSpeak = async () => {
     if (!inputText.trim()) return;
     await speak(inputText, selectedVoice, speed);
+  };
+  
+  const handleListen = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+  
+  const handleConversation = async (userMessage: string) => {
+    if (isProcessing || isPlaying) return;
+    
+    setIsProcessing(true);
+    setInputText(userMessage);
+    
+    try {
+      // Get AI response
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessage,
+          conversationHistory: conversationHistory.slice(-10) // Keep last 10 messages
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get AI response');
+      }
+      
+      const { reply } = await response.json();
+      
+      // Update conversation history
+      const newHistory = [
+        ...conversationHistory,
+        { role: 'user', content: userMessage },
+        { role: 'assistant', content: reply }
+      ];
+      setConversationHistory(newHistory);
+      
+      // Speak the response
+      setInputText(reply);
+      await speak(reply, selectedVoice, speed);
+      
+    } catch (err: any) {
+      console.error('Conversation error:', err);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const voices = [
@@ -44,11 +129,35 @@ export default function HomePage() {
         {/* Header */}
         <header className="text-center mb-8">
           <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            Real-Time Lip-Sync Avatar
+            AI Conversation Avatar
           </h1>
           <p className="text-gray-400 text-lg">
-            OpenAI Streaming TTS • Rhubarb Phonemes • React Three Fiber
+            OpenAI Chat • Speech Recognition • Real-Time Lip Sync
           </p>
+          
+          {/* Mode Toggle */}
+          <div className="mt-6 flex justify-center gap-4">
+            <button
+              onClick={() => setMode('conversation')}
+              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                mode === 'conversation'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              🎤 Conversation Mode
+            </button>
+            <button
+              onClick={() => setMode('text')}
+              className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                mode === 'text'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              📝 Text Mode
+            </button>
+          </div>
         </header>
 
         {/* Main Content */}
@@ -63,10 +172,16 @@ export default function HomePage() {
                 <span className="text-sm text-gray-400">Status:</span>
                 <div className="flex items-center gap-2">
                   <div
-                    className={`w-2 h-2 rounded-full ${isPlaying ? "bg-green-500 animate-pulse" : "bg-gray-600"}`}
+                    className={`w-2 h-2 rounded-full ${
+                      isListening 
+                        ? "bg-red-500 animate-pulse" 
+                        : isPlaying 
+                        ? "bg-green-500 animate-pulse" 
+                        : "bg-gray-600"
+                    }`}
                   />
                   <span className="text-sm font-medium">
-                    {isPlaying ? "Speaking" : "Idle"}
+                    {isListening ? "Listening..." : isPlaying ? "Speaking" : isProcessing ? "Thinking..." : "Idle"}
                   </span>
                 </div>
               </div>
@@ -151,41 +266,74 @@ export default function HomePage() {
 
             {/* Action Buttons */}
             <div className="flex gap-3">
-              <button
-                onClick={handleSpeak}
-                disabled={isPlaying || !inputText.trim()}
-                className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 
-                         hover:from-blue-700 hover:to-blue-800
+              {mode === 'conversation' ? (
+                <>
+                  <button
+                    onClick={handleListen}
+                    disabled={isPlaying || isProcessing || !isSpeechSupported}
+                    className={`flex-1 px-6 py-4 ${
+                      isListening 
+                        ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 animate-pulse'
+                        : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
+                    }
                          disabled:from-gray-700 disabled:to-gray-700
                          disabled:cursor-not-allowed rounded-lg font-semibold text-lg
                          transition-all duration-200 shadow-lg hover:shadow-xl
-                         transform hover:scale-[1.02] active:scale-[0.98]"
-              >
-                {isPlaying ? "🎤 Speaking..." : "🎙️ Speak"}
-              </button>
+                         transform hover:scale-[1.02] active:scale-[0.98]`}
+                  >
+                    {isListening ? "🎤 Listening..." : "🎧 Start Listening"}
+                  </button>
+                  
+                  <button
+                    onClick={stop}
+                    disabled={!isPlaying && !isListening}
+                    className="px-6 py-4 bg-red-600 hover:bg-red-700 
+                             disabled:bg-gray-700 disabled:cursor-not-allowed 
+                             rounded-lg font-semibold text-lg transition-all duration-200
+                             shadow-lg hover:shadow-xl"
+                  >
+                    ⏹️ Stop
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleSpeak}
+                    disabled={isPlaying || !inputText.trim()}
+                    className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 
+                             hover:from-blue-700 hover:to-blue-800
+                             disabled:from-gray-700 disabled:to-gray-700
+                             disabled:cursor-not-allowed rounded-lg font-semibold text-lg
+                             transition-all duration-200 shadow-lg hover:shadow-xl
+                             transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    {isPlaying ? "🎤 Speaking..." : "🎙️ Speak"}
+                  </button>
 
-              <button
-                onClick={stop}
-                disabled={!isPlaying}
-                className="px-6 py-4 bg-red-600 hover:bg-red-700 
-                         disabled:bg-gray-700 disabled:cursor-not-allowed 
-                         rounded-lg font-semibold text-lg transition-all duration-200
-                         shadow-lg hover:shadow-xl"
-              >
-                ⏹️ Stop
-              </button>
+                  <button
+                    onClick={stop}
+                    disabled={!isPlaying}
+                    className="px-6 py-4 bg-red-600 hover:bg-red-700 
+                             disabled:bg-gray-700 disabled:cursor-not-allowed 
+                             rounded-lg font-semibold text-lg transition-all duration-200
+                             shadow-lg hover:shadow-xl"
+                  >
+                    ⏹️ Stop
+                  </button>
 
-              <button
-                onClick={replay}
-                disabled={!hasAudio || isPlaying}
-                className="px-6 py-4 bg-purple-600 hover:bg-purple-700 
-                         disabled:bg-gray-700 disabled:cursor-not-allowed 
-                         rounded-lg font-semibold text-lg transition-all duration-200
-                         shadow-lg hover:shadow-xl"
-                title="Replay last audio"
-              >
-                🔄
-              </button>
+                  <button
+                    onClick={replay}
+                    disabled={!hasAudio || isPlaying}
+                    className="px-6 py-4 bg-purple-600 hover:bg-purple-700 
+                             disabled:bg-gray-700 disabled:cursor-not-allowed 
+                             rounded-lg font-semibold text-lg transition-all duration-200
+                             shadow-lg hover:shadow-xl"
+                    title="Replay last audio"
+                  >
+                    🔄
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Error Display */}
@@ -198,13 +346,24 @@ export default function HomePage() {
 
             {/* Info Box */}
             <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-4 text-blue-200 text-sm">
-              <div className="font-semibold mb-2">💡 How it works:</div>
-              <ul className="space-y-1 text-xs list-disc list-inside text-blue-300">
-                <li>Text is converted to speech using OpenAI TTS</li>
-                <li>Audio streams in real-time for low latency</li>
-                <li>Phonemes extracted with Rhubarb Lip Sync</li>
-                <li>Avatar mouth synchronized to speech sounds</li>
-              </ul>
+              <div className="font-semibold mb-2">
+                💡 {mode === 'conversation' ? 'Conversation Mode' : 'Text Mode'}:
+              </div>
+              {mode === 'conversation' ? (
+                <ul className="space-y-1 text-xs list-disc list-inside text-blue-300">
+                  <li>Click "Start Listening" and speak your message</li>
+                  <li>Your speech is converted to text automatically</li>
+                  <li>AI processes your message and generates a response</li>
+                  <li>Avatar speaks the response with lip sync</li>
+                </ul>
+              ) : (
+                <ul className="space-y-1 text-xs list-disc list-inside text-blue-300">
+                  <li>Type your message in the text box</li>
+                  <li>OpenAI converts text to speech</li>
+                  <li>Phonemes extracted with Rhubarb Lip Sync</li>
+                  <li>Avatar mouth synchronized to speech sounds</li>
+                </ul>
+              )}
             </div>
           </div>
         </div>

@@ -147,21 +147,89 @@ export class PhonemeService {
       return { mouthCues: [{ start: 0, end: durationSeconds, value: 'X' }] };
     }
     
-    const secondsPerWord = durationSeconds / words.length;
     const mouthCues: MouthCue[] = [];
+    let currentTime = 0;
     
-    // Simple alternating pattern for basic talking motion
-    words.forEach((word, i) => {
-      const start = i * secondsPerWord;
-      const mid = start + secondsPerWord * 0.5;
-      const end = (i + 1) * secondsPerWord;
+    // Simple phoneme mapping based on common letter combinations
+    const estimateWordPhonemes = (word: string): string[] => {
+      const phonemes: string[] = [];
+      const lower = word.toLowerCase();
       
-      // Alternate between open (A) and closed (X) for visual feedback
-      mouthCues.push(
-        { start, end: mid, value: 'A' },
-        { start: mid, end, value: 'X' }
-      );
+      for (let i = 0; i < lower.length; i++) {
+        const char = lower[i];
+        const nextChar = lower[i + 1] || '';
+        
+        // Skip if already processed as digraph
+        if (i > 0 && lower[i - 1] === 't' && char === 'h') continue;
+        
+        // Digraphs (two-letter combinations)
+        if (char === 't' && nextChar === 'h') {
+          phonemes.push('G'); // Tongue between teeth
+          i++; // Skip next char
+          continue;
+        }
+        
+        // Consonants
+        if ('mbp'.includes(char)) {
+          phonemes.push('B'); // Lips together
+        } else if ('fv'.includes(char)) {
+          phonemes.push('F'); // Teeth on lip
+        } else if ('wd'.includes(char)) {
+          phonemes.push('D'); // Wide
+        } else if ('lr'.includes(char)) {
+          phonemes.push('C'); // Slightly open
+        } else if ('sz'.includes(char)) {
+          phonemes.push('H'); // Very open
+        } else if ('aeiou'.includes(char)) {
+          // Vowels
+          if (char === 'a' || char === 'e') {
+            phonemes.push('A'); // Open (ah/eh)
+          } else if (char === 'o' || char === 'u') {
+            phonemes.push('E'); // Rounded (oh/oo)
+          } else if (char === 'i' || char === 'y') {
+            phonemes.push('H'); // Very open (ee)
+          }
+        } else {
+          // Other consonants - slight opening
+          phonemes.push('C');
+        }
+      }
+      
+      // Ensure we have at least some movement
+      if (phonemes.length === 0) {
+        phonemes.push('A', 'X');
+      }
+      
+      return phonemes;
+    };
+    
+    const timePerWord = durationSeconds / words.length;
+    
+    words.forEach((word) => {
+      const phonemes = estimateWordPhonemes(word);
+      const timePerPhoneme = (timePerWord * 0.9) / Math.max(phonemes.length, 1);
+      
+      phonemes.forEach((phoneme) => {
+        mouthCues.push({
+          start: currentTime,
+          end: currentTime + timePerPhoneme,
+          value: phoneme
+        });
+        currentTime += timePerPhoneme;
+      });
+      
+      // Add brief rest between words
+      const pauseDuration = timePerWord * 0.1;
+      mouthCues.push({
+        start: currentTime,
+        end: currentTime + pauseDuration,
+        value: 'X'
+      });
+      currentTime += pauseDuration;
     });
+    
+    console.log(`Generated ${mouthCues.length} estimated mouth cues for "${text.slice(0, 50)}..."`);
+    console.log('Sample cues:', mouthCues.slice(0, 10));
     
     return { mouthCues };
   }

@@ -30,7 +30,7 @@ export function useLipSync() {
   
   const audioManagerRef = useRef<AudioManager | null>(null);
   const phonemeDataRef = useRef<MouthCue[]>([]);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
   const audioBufferRef = useRef<ArrayBuffer | null>(null);
   
   // Initialize audio manager
@@ -59,15 +59,20 @@ export function useLipSync() {
     );
     
     if (currentCue) {
-      setCurrentViseme(currentCue.value);
+      if (currentCue.value !== currentViseme) {
+        console.log(`Time: ${currentTime.toFixed(2)}s -> Viseme: ${currentCue.value}`);
+        setCurrentViseme(currentCue.value);
+      }
     } else if (currentTime > 0) {
       // Default to closed mouth if no cue found
-      setCurrentViseme('X');
+      if (currentViseme !== 'X') {
+        setCurrentViseme('X');
+      }
     }
     
     // Continue animation loop
     animationFrameRef.current = requestAnimationFrame(updateViseme);
-  }, [isPlaying]);
+  }, [isPlaying, currentViseme]);
   
   // Start/stop animation loop when playing state changes
   useEffect(() => {
@@ -123,39 +128,29 @@ export function useLipSync() {
       if (!reader) throw new Error('No response body');
       
       const chunks: Uint8Array[] = [];
-      let hasStartedPlayback = false;
+      
+      // Estimate phonemes immediately for the full text (rough estimate)
+      // We'll refine this with actual audio duration once collected
+      const roughDuration = text.split(/\s+/).length * 0.4; // ~0.4s per word estimate
+      await getEstimatedPhonemes(text, roughDuration);
       
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
         chunks.push(value);
-        
-        // Start playback after buffering 3 chunks (reduces stuttering)
-        if (chunks.length === 3 && !hasStartedPlayback) {
-          hasStartedPlayback = true;
-          const bufferSoFar = AudioManager.concatenateChunks(chunks);
-          
-          // Get estimated phonemes for immediate playback
-          const estimatedDuration = AudioManager.estimateDuration(bufferSoFar);
-          await getEstimatedPhonemes(text, estimatedDuration);
-          
-          setProgress('Playing...');
-          await audioManagerRef.current.playPCM(bufferSoFar);
-        }
       }
       
       // Concatenate all chunks
       const fullAudioBuffer = AudioManager.concatenateChunks(chunks);
       audioBufferRef.current = fullAudioBuffer;
       
-      // If we didn't start playback yet (audio was very short), play now
-      if (!hasStartedPlayback) {
-        const duration = AudioManager.estimateDuration(fullAudioBuffer);
-        await getEstimatedPhonemes(text, duration);
-        setProgress('Playing...');
-        await audioManagerRef.current.playPCM(fullAudioBuffer);
-      }
+      // Get more accurate phoneme estimate with actual audio duration
+      const actualDuration = AudioManager.estimateDuration(fullAudioBuffer);
+      await getEstimatedPhonemes(text, actualDuration);
+      
+      // Start playback with full audio
+      setProgress('Playing...');
+      await audioManagerRef.current.playPCM(fullAudioBuffer);
       
       // Step 3: Background refinement with Rhubarb
       setProgress('Refining lip-sync...');

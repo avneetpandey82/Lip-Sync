@@ -14,7 +14,7 @@ interface AvatarSceneProps {
  */
 export function AvatarScene({ currentViseme }: AvatarSceneProps) {
   return (
-    <div className="w-full h-[600px] bg-gradient-to-b from-slate-900 to-slate-700 rounded-lg overflow-hidden shadow-2xl">
+    <div className="w-full h-[600px] bg-gradient-to-b from-blue-900 to-slate-800 rounded-lg overflow-hidden shadow-2xl border-4 border-blue-700">
       <Canvas
         shadows
         gl={{
@@ -23,26 +23,37 @@ export function AvatarScene({ currentViseme }: AvatarSceneProps) {
           powerPreference: "high-performance",
         }}
       >
-        {/* Camera Setup */}
-        <PerspectiveCamera makeDefault position={[0, 0, 5]} fov={50} />
+        {/* Camera Setup - Closer for better face visibility */}
+        <PerspectiveCamera makeDefault position={[0, 0, 3.5]} fov={50} />
 
-        {/* Lighting */}
-        <ambientLight intensity={0.4} />
+        {/* Lighting - Brighter and more focused on face */}
+        <ambientLight intensity={0.6} />
+        
+        {/* Main front light */}
         <directionalLight
-          position={[5, 5, 5]}
-          intensity={0.8}
+          position={[0, 2, 5]}
+          intensity={1.2}
           castShadow
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
         />
-        <pointLight position={[-5, 3, -3]} intensity={0.3} color="#9090ff" />
-        <pointLight position={[5, 3, -3]} intensity={0.3} color="#ff9090" />
-
-        {/* Rim light for depth */}
+        
+        {/* Fill lights from sides */}
+        <pointLight position={[-3, 1, 3]} intensity={0.5} color="#ffffff" />
+        <pointLight position={[3, 1, 3]} intensity={0.5} color="#ffffff" />
+        
+        {/* Top light for highlights */}
         <directionalLight
-          position={[0, 2, -5]}
-          intensity={0.2}
+          position={[0, 5, 2]}
+          intensity={0.4}
           color="#ffffff"
+        />
+        
+        {/* Rim light from behind */}
+        <directionalLight
+          position={[0, 0, -3]}
+          intensity={0.3}
+          color="#88bbff"
         />
 
         {/* Avatar with Suspense for loading */}
@@ -50,20 +61,22 @@ export function AvatarScene({ currentViseme }: AvatarSceneProps) {
           <Avatar3D currentViseme={currentViseme} />
         </Suspense>
 
-        {/* Interactive Controls */}
+        {/* Interactive Controls - Optimized for face viewing */}
         <OrbitControls
           enableZoom={true}
           enablePan={false}
-          minDistance={3}
-          maxDistance={8}
-          minPolarAngle={Math.PI / 4} // Limit vertical rotation
-          maxPolarAngle={Math.PI / 1.5}
-          target={[0, 0, 0]}
+          minDistance={2.5}
+          maxDistance={6}
+          minPolarAngle={Math.PI / 3} // Limit vertical rotation
+          maxPolarAngle={Math.PI / 1.8}
+          target={[0, 0.2, 0]} // Focus slightly above center (face level)
+          enableDamping={true}
+          dampingFactor={0.05}
         />
 
         {/* Background atmosphere */}
-        <color attach="background" args={["#1e293b"]} />
-        <fog attach="fog" args={["#1e293b", 8, 15]} />
+        <color attach="background" args={["#1a2332"]} />
+        <fog attach="fog" args={["#1a2332", 6, 12]} />
       </Canvas>
 
       {/* Debug overlay */}
