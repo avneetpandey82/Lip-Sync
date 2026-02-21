@@ -153,163 +153,432 @@ export function Avatar3D({
 
   return (
     <group ref={headRef} position={[0, 0, 0]}>
-      {/* Head - More oval shaped like human face */}
-      <mesh position={[0, 0.3, 0]}>
-        <sphereGeometry args={[1.2, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.7]} />
-        <meshStandardMaterial color="#ffd4a3" roughness={0.5} metalness={0.1} />
+      {/* CRANIUM - Realistic human head shape (elongated oval) */}
+      <mesh position={[0, 0.25, -0.05]} scale={[0.95, 1.15, 1.0]} castShadow receiveShadow>
+        <sphereGeometry args={[0.95, 64, 64]} />
+        <meshStandardMaterial 
+          color="#f4c8a8"
+          roughness={0.85}
+          metalness={0.0}
+        />
       </mesh>
       
-      {/* Neck */}
-      <mesh position={[0, -0.6, 0]}>
-        <cylinderGeometry args={[0.4, 0.5, 0.6, 16]} />
-        <meshStandardMaterial color="#ffc896" roughness={0.5} metalness={0.1} />
+      {/* HAIR - Natural looking hair */}
+      <group position={[0, 0.5, 0]}>
+        {/* Main hair volume */}
+        <mesh position={[0, 0.35, 0]} scale={[1.05, 0.85, 1.05]}>
+          <sphereGeometry args={[1.0, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.7]} />
+          <meshStandardMaterial 
+            color="#3d2817"
+            roughness={0.95}
+            metalness={0.0}
+          />
+        </mesh>
+        
+        {/* Hair strands - left side */}
+        <mesh position={[-0.75, 0, 0.2]} rotation={[0, 0, -0.3]}>
+          <capsuleGeometry args={[0.3, 0.6, 8, 16]} />
+          <meshStandardMaterial color="#3d2817" roughness={0.95} />
+        </mesh>
+        <mesh position={[-0.85, -0.1, 0.4]} rotation={[0.2, 0, -0.4]}>
+          <capsuleGeometry args={[0.25, 0.5, 8, 16]} />
+          <meshStandardMaterial color="#3d2817" roughness={0.95} />
+        </mesh>
+        
+        {/* Hair strands - right side */}
+        <mesh position={[0.75, 0, 0.2]} rotation={[0, 0, 0.3]}>
+          <capsuleGeometry args={[0.3, 0.6, 8, 16]} />
+          <meshStandardMaterial color="#3d2817" roughness={0.95} />
+        </mesh>
+        <mesh position={[0.85, -0.1, 0.4]} rotation={[0.2, 0, 0.4]}>
+          <capsuleGeometry args={[0.25, 0.5, 8, 16]} />
+          <meshStandardMaterial color="#3d2817" roughness={0.95} />
+        </mesh>
+        
+        {/* Bangs/Fringe */}
+        <mesh position={[0, 0.25, 0.8]} rotation={[0.4, 0, 0]}>
+          <capsuleGeometry args={[0.2, 0.8, 12, 16]} />
+          <meshStandardMaterial color="#3d2817" roughness={0.95} />
+        </mesh>
+        <mesh position={[-0.25, 0.3, 0.85]} rotation={[0.3, 0.2, -0.1]}>
+          <capsuleGeometry args={[0.15, 0.6, 8, 16]} />
+          <meshStandardMaterial color="#3d2817" roughness={0.95} />
+        </mesh>
+        <mesh position={[0.25, 0.3, 0.85]} rotation={[0.3, -0.2, 0.1]}>
+          <capsuleGeometry args={[0.15, 0.6, 8, 16]} />
+          <meshStandardMaterial color="#3d2817" roughness={0.95} />
+        </mesh>
+      </group>
+      
+      {/* FACE - Front facade with proper depth */}
+      <mesh position={[0, 0.15, 0.75]} scale={[0.80, 0.95, 0.65]} castShadow receiveShadow>
+        <sphereGeometry args={[0.85, 64, 64]} />
+        <meshStandardMaterial 
+          color="#f7d5b8"
+          roughness={0.75}
+          metalness={0.0}
+        />
+      </mesh>
+      
+      {/* Forehead */}
+      <mesh position={[0, 0.65, 0.6]} scale={[0.9, 0.65, 0.7]}>
+        <sphereGeometry args={[0.55, 48, 48]} />
+        <meshStandardMaterial 
+          color="#fae0c8"
+          roughness={0.65}
+          metalness={0.0}
+        />
       </mesh>
 
-      {/* Eyes - Much larger and more visible */}
-      <group position={[0, 0.5, 0]}>
-        {/* Left Eye White */}
-        <mesh position={[-0.35, 0, 0.95]}>
-          <sphereGeometry args={[0.18, 16, 16]} />
-          <meshStandardMaterial color="#ffffff" />
+      {/* EARS - Realistic placement */}
+      <group>
+        {/* Left ear */}
+        <mesh position={[-0.88, 0.15, 0.1]} rotation={[0, -0.4, -0.2]} castShadow>
+          <capsuleGeometry args={[0.15, 0.42, 16, 32]} />
+          <meshStandardMaterial color="#f0c4a0" roughness={0.8} />
+        </mesh>
+        <mesh position={[-0.85, 0.15, 0.15]} rotation={[0, -0.3, -0.2]}>
+          <torusGeometry args={[0.12, 0.04, 12, 24]} />
+          <meshStandardMaterial color="#e8b890" roughness={0.85} />
         </mesh>
         
-        {/* Right Eye White */}
-        <mesh position={[0.35, 0, 0.95]}>
-          <sphereGeometry args={[0.18, 16, 16]} />
-          <meshStandardMaterial color="#ffffff" />
+        {/* Right ear */}
+        <mesh position={[0.88, 0.15, 0.1]} rotation={[0, 0.4, 0.2]} castShadow>
+          <capsuleGeometry args={[0.15, 0.42, 16, 32]} />
+          <meshStandardMaterial color="#f0c4a0" roughness={0.8} />
         </mesh>
-        
-        {/* Left Iris */}
-        <mesh position={[-0.35, 0, 1.08]}>
-          <sphereGeometry args={[0.11, 16, 16]} />
-          <meshStandardMaterial color="#4a90e2" />
-        </mesh>
-        
-        {/* Right Iris */}
-        <mesh position={[0.35, 0, 1.08]}>
-          <sphereGeometry args={[0.11, 16, 16]} />
-          <meshStandardMaterial color="#4a90e2" />
-        </mesh>
-        
-        {/* Left Pupil */}
-        <mesh ref={leftEyeRef} position={[-0.35, 0, 1.15]}>
-          <sphereGeometry args={[0.06, 12, 12]} />
-          <meshStandardMaterial color="#000000" />
-        </mesh>
-        
-        {/* Right Pupil */}
-        <mesh ref={rightEyeRef} position={[0.35, 0, 1.15]}>
-          <sphereGeometry args={[0.06, 12, 12]} />
-          <meshStandardMaterial color="#000000" />
-        </mesh>
-        
-        {/* Eye highlights */}
-        <mesh position={[-0.32, 0.03, 1.19]}>
-          <sphereGeometry args={[0.03, 8, 8]} />
-          <meshStandardMaterial
-            color="#ffffff"
-            emissive="#ffffff"
-            emissiveIntensity={0.8}
-          />
-        </mesh>
-        <mesh position={[0.38, 0.03, 1.19]}>
-          <sphereGeometry args={[0.03, 8, 8]} />
-          <meshStandardMaterial
-            color="#ffffff"
-            emissive="#ffffff"
-            emissiveIntensity={0.8}
-          />
-        </mesh>
-        
-        {/* Eyebrows */}
-        <mesh position={[-0.35, 0.22, 1.0]} rotation={[0, 0, -0.2]}>
-          <boxGeometry args={[0.35, 0.06, 0.08]} />
-          <meshStandardMaterial color="#5c4033" />
-        </mesh>
-        <mesh position={[0.35, 0.22, 1.0]} rotation={[0, 0, 0.2]}>
-          <boxGeometry args={[0.35, 0.06, 0.08]} />
-          <meshStandardMaterial color="#5c4033" />
+        <mesh position={[0.85, 0.15, 0.15]} rotation={[0, 0.3, 0.2]}>
+          <torusGeometry args={[0.12, 0.04, 12, 24]} />
+          <meshStandardMaterial color="#e8b890" roughness={0.85} />
         </mesh>
       </group>
 
-      {/* Nose - More prominent */}
-      <mesh position={[0, 0.25, 1.15]}>
-        <coneGeometry args={[0.15, 0.35, 4]} />
-        <meshStandardMaterial color="#ffcba4" roughness={0.6} />
+      {/* Neck */}
+      <mesh position={[0, -0.82, 0.08]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.30, 0.36, 0.7, 32]} />
+        <meshStandardMaterial 
+          color="#f5cdb0"
+          roughness={0.75}
+        />
       </mesh>
       
-      {/* Nostrils */}
-      <mesh position={[-0.08, 0.1, 1.22]}>
-        <sphereGeometry args={[0.04, 8, 8]} />
-        <meshStandardMaterial color="#d4a574" />
-      </mesh>
-      <mesh position={[0.08, 0.1, 1.22]}>
-        <sphereGeometry args={[0.04, 8, 8]} />
-        <meshStandardMaterial color="#d4a574" />
+      {/* Shoulders hint */}
+      <mesh position={[0, -1.15, 0]} scale={[1.8, 0.4, 0.7]}>
+        <capsuleGeometry args={[0.35, 0.5, 16, 32]} />
+        <meshStandardMaterial color="#4a5568" roughness={0.6} />
       </mesh>
 
-      {/* Cheeks - Add some depth */}
-      <mesh position={[-0.5, 0.15, 0.85]}>
-        <sphereGeometry args={[0.25, 16, 16]} />
-        <meshStandardMaterial color="#ffdab3" roughness={0.6} />
-      </mesh>
-      <mesh position={[0.5, 0.15, 0.85]}>
-        <sphereGeometry args={[0.25, 16, 16]} />
-        <meshStandardMaterial color="#ffdab3" roughness={0.6} />
-      </mesh>
-
-      {/* MOUTH AREA - MUCH LARGER AND MORE VISIBLE */}
-      <group position={[0, -0.1, 1.0]}>
-        {/* Inner mouth (dark opening) - BIGGER */}
-        <mesh ref={mouthRef} position={[0, 0, 0]}>
-          <boxGeometry args={[1.0, 0.5, 0.15]} />
-          <meshStandardMaterial color="#2d0a0a" />
+      {/* EYES - Highly realistic */}
+      <group position={[0, 0.35, 0]}>
+        {/* Eye sockets with proper shadowing */}
+        <mesh position={[-0.32, 0.03, 0.82]}>
+          <sphereGeometry args={[0.20, 32, 32]} />
+          <meshStandardMaterial color="#e8c4a5" roughness={0.9} />
+        </mesh>
+        <mesh position={[0.32, 0.03, 0.82]}>
+          <sphereGeometry args={[0.20, 32, 32]} />
+          <meshStandardMaterial color="#e8c4a5" roughness={0.9} />
         </mesh>
         
-        {/* Teeth - Upper (visible when mouth opens) */}
-        <mesh ref={teethRef} position={[0, 0.25, 0.05]}>
-          <boxGeometry args={[0.75, 0.15, 0.1]} />
+        {/* Eye whites - glossy */}
+        <mesh position={[-0.32, 0.03, 0.96]}>
+          <sphereGeometry args={[0.16, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.52]} />
           <meshStandardMaterial 
-            color="#ffffff" 
+            color="#ffffff"
             roughness={0.2}
+            metalness={0.15}
+          />
+        </mesh>
+        <mesh position={[0.32, 0.03, 0.96]}>
+          <sphereGeometry args={[0.16, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.52]} />
+          <meshStandardMaterial 
+            color="#ffffff"
+            roughness={0.2}
+            metalness={0.15}
+          />
+        </mesh>
+        
+        {/* Iris - detailed */}
+        <mesh position={[-0.32, 0.03, 1.08]}>
+          <circleGeometry args={[0.08, 32]} />
+          <meshStandardMaterial 
+            color="#2d5f8d"
+            roughness={0.25}
+            metalness={0.3}
+          />
+        </mesh>
+        <mesh position={[0.32, 0.03, 1.08]}>
+          <circleGeometry args={[0.08, 32]} />
+          <meshStandardMaterial 
+            color="#2d5f8d"
+            roughness={0.25}
+            metalness={0.3}
+          />
+        </mesh>
+        
+        {/* Iris inner ring */}
+        <mesh position={[-0.32, 0.03, 1.09]}>
+          <circleGeometry args={[0.05, 32]} />
+          <meshStandardMaterial 
+            color="#4a8cc2"
+            roughness={0.2}
+          />
+        </mesh>
+        <mesh position={[0.32, 0.03, 1.09]}>
+          <circleGeometry args={[0.05, 32]} />
+          <meshStandardMaterial 
+            color="#4a8cc2"
+            roughness={0.2}
+          />
+        </mesh>
+        
+        {/* Pupils */}
+        <mesh ref={leftEyeRef} position={[-0.32, 0.03, 1.10]}>
+          <circleGeometry args={[0.035, 32]} />
+          <meshStandardMaterial color="#000000" />
+        </mesh>
+        <mesh ref={rightEyeRef} position={[0.32, 0.03, 1.10]}>
+          <circleGeometry args={[0.035, 32]} />
+          <meshStandardMaterial color="#000000" />
+        </mesh>
+        
+        {/* Eye highlights - catchlights */}
+        <mesh position={[-0.29, 0.06, 1.11]}>
+          <circleGeometry args={[0.025, 16]} />
+          <meshStandardMaterial
+            color="#ffffff"
+            emissive="#ffffff"
+            emissiveIntensity={1.5}
+          />
+        </mesh>
+        <mesh position={[0.35, 0.06, 1.11]}>
+          <circleGeometry args={[0.025, 16]} />
+          <meshStandardMaterial
+            color="#ffffff"
+            emissive="#ffffff"
+            emissiveIntensity={1.5}
+          />
+        </mesh>
+        
+        {/* Upper eyelids - natural curve */}
+        <mesh position={[-0.32, 0.12, 1.05]} rotation={[0.15, 0, 0]}>
+          <capsuleGeometry args={[0.04, 0.32, 12, 24]} />
+          <meshStandardMaterial color="#f2c8a8" roughness={0.65} />
+        </mesh>
+        <mesh position={[0.32, 0.12, 1.05]} rotation={[0.15, 0, 0]}>
+          <capsuleGeometry args={[0.04, 0.32, 12, 24]} />
+          <meshStandardMaterial color="#f2c8a8" roughness={0.65} />
+        </mesh>
+        
+        {/* Lower eyelids */}
+        <mesh position={[-0.32, -0.06, 1.05]} rotation={[-0.15, 0, 0]}>
+          <capsuleGeometry args={[0.03, 0.32, 12, 24]} />
+          <meshStandardMaterial color="#f2c8a8" roughness={0.65} />
+        </mesh>
+        <mesh position={[0.32, -0.06, 1.05]} rotation={[-0.15, 0, 0]}>
+          <capsuleGeometry args={[0.03, 0.32, 12, 24]} />
+          <meshStandardMaterial color="#f2c8a8" roughness={0.65} />
+        </mesh>
+        
+        {/* Eyebrows - fuller and natural */}
+        <mesh position={[-0.32, 0.22, 1.0]} rotation={[0.1, 0, -0.12]} castShadow>
+          <capsuleGeometry args={[0.035, 0.38, 12, 24]} />
+          <meshStandardMaterial color="#2d1f15" roughness={0.95} />
+        </mesh>
+        <mesh position={[0.32, 0.22, 1.0]} rotation={[0.1, 0, 0.12]} castShadow>
+          <capsuleGeometry args={[0.035, 0.38, 12, 24]} />
+          <meshStandardMaterial color="#2d1f15" roughness={0.95} />
+        </mesh>
+      </group>
+
+      {/* NOSE - Elegant and proportional */}
+      <group position={[0, 0.2, 0]}>
+        {/* Nose bridge */}
+        <mesh position={[0, 0.18, 0.98]} rotation={[0.1, 0, 0]}>
+          <boxGeometry args={[0.14, 0.45, 0.18]} />
+          <meshStandardMaterial color="#f5d0b5" roughness={0.7} />
+        </mesh>
+        
+        {/* Nose tip */}
+        <mesh position={[0, -0.05, 1.08]}>
+          <sphereGeometry args={[0.14, 32, 32]} />
+          <meshStandardMaterial color="#f3cab0" roughness={0.65} />
+        </mesh>
+        
+        {/* Nose wings */}
+        <mesh position={[-0.10, -0.08, 1.05]} rotation={[0.2, -0.3, -0.1]}>
+          <sphereGeometry args={[0.10, 24, 24]} />
+          <meshStandardMaterial color="#f3cab0" roughness={0.7} />
+        </mesh>
+        <mesh position={[0.10, -0.08, 1.05]} rotation={[0.2, 0.3, 0.1]}>
+          <sphereGeometry args={[0.10, 24, 24]} />
+          <meshStandardMaterial color="#f3cab0" roughness={0.7} />
+        </mesh>
+        
+        {/* Nostrils */}
+        <mesh position={[-0.08, -0.12, 1.12]} rotation={[0.5, -0.2, 0]}>
+          <capsuleGeometry args={[0.025, 0.06, 8, 16]} />
+          <meshStandardMaterial color="#c89878" />
+        </mesh>
+        <mesh position={[0.08, -0.12, 1.12]} rotation={[0.5, 0.2, 0]}>
+          <capsuleGeometry args={[0.025, 0.06, 8, 16]} />
+          <meshStandardMaterial color="#c89878" />
+        </mesh>
+      </group>
+
+      {/* Cheekbones */}
+      <mesh position={[-0.52, 0.25, 0.68]} castShadow>
+        <sphereGeometry args={[0.24, 32, 32]} />
+        <meshStandardMaterial 
+          color="#fae5d0"
+          roughness={0.7}
+        />
+      </mesh>
+      <mesh position={[0.52, 0.25, 0.68]} castShadow>
+        <sphereGeometry args={[0.24, 32, 32]} />
+        <meshStandardMaterial 
+          color="#fae5d0"
+          roughness={0.7}
+        />
+      </mesh>
+
+      {/* MOUTH & LIPS - Prominent and expressive */}
+      <group position={[0, -0.15, 0.95]}>
+        {/* Mouth cavity */}
+        <mesh ref={mouthRef} position={[0, 0, 0]}>
+          <boxGeometry args={[0.65, 0.30, 0.15]} />
+          <meshStandardMaterial color="#2a0808" roughness={0.95} />
+        </mesh>
+        
+        {/* Upper teeth */}
+        <mesh ref={teethRef} position={[0, 0.13, 0.06]}>
+          <boxGeometry args={[0.52, 0.09, 0.08]} />
+          <meshStandardMaterial 
+            color="#ffffff"
+            roughness={0.2}
+            metalness={0.05}
+            transparent={true}
+            opacity={0}
+          />
+        </mesh>
+        
+        {/* Lower teeth */}
+        <mesh position={[0, -0.13, 0.06]}>
+          <boxGeometry args={[0.52, 0.09, 0.08]} />
+          <meshStandardMaterial 
+            color="#fafafa"
+            roughness={0.25}
+            metalness={0.05}
             transparent={true}
             opacity={0}
           />
         </mesh>
         
         {/* Tongue */}
-        <mesh ref={tongueRef} position={[0, -0.3, -0.05]}>
-          <boxGeometry args={[0.5, 0.15, 0.2]} />
-          <meshStandardMaterial color="#ff6b9d" roughness={0.4} />
+        <mesh ref={tongueRef} position={[0, -0.15, 0]}>
+          <capsuleGeometry args={[0.16, 0.38, 16, 32]} />
+          <meshStandardMaterial 
+            color="#e85570"
+            roughness={0.5}
+            metalness={0.1}
+          />
         </mesh>
         
-        {/* Upper Lip - MUCH LARGER */}
-        <mesh ref={upperLipRef} position={[0, 0.05, 0.08]}>
-          <boxGeometry args={[1.0, 0.18, 0.2]} />
-          <meshStandardMaterial color="#ff6b8a" roughness={0.3} metalness={0.1} />
+        {/* Upper Lip - Natural and full */}
+        <mesh ref={upperLipRef} position={[0, 0.04, 0.08]} rotation={[0.12, 0, 0]}>
+          <capsuleGeometry args={[0.10, 0.68, 20, 32]} />
+          <meshStandardMaterial 
+            color="#cd5a70"
+            roughness={0.35}
+            metalness={0.08}
+          />
         </mesh>
         
-        {/* Lower Lip - MUCH LARGER */}
-        <mesh ref={lowerLipRef} position={[0, -0.05, 0.08]}>
-          <boxGeometry args={[1.0, 0.18, 0.2]} />
-          <meshStandardMaterial color="#ff5577" roughness={0.3} metalness={0.1} />
+        {/* Upper lip cupid's bow */}
+        <mesh position={[0, 0.07, 0.12]}>
+          <sphereGeometry args={[0.06, 24, 24]} />
+          <meshStandardMaterial 
+            color="#d86880"
+            roughness={0.3}
+            metalness={0.1}
+          />
         </mesh>
         
-        {/* Lip corners for more realism */}
-        <mesh position={[-0.5, 0, 0.1]}>
-          <sphereGeometry args={[0.08, 8, 8]} />
-          <meshStandardMaterial color="#ff5577" roughness={0.4} />
+        {/* Upper lip highlight */}
+        <mesh position={[0, 0.08, 0.14]}>
+          <capsuleGeometry args={[0.045, 0.48, 12, 24]} />
+          <meshStandardMaterial 
+            color="#f098a8"
+            roughness={0.15}
+            metalness={0.2}
+            transparent={true}
+            opacity={0.75}
+          />
         </mesh>
-        <mesh position={[0.5, 0, 0.1]}>
-          <sphereGeometry args={[0.08, 8, 8]} />
-          <meshStandardMaterial color="#ff5577" roughness={0.4} />
+        
+        {/* Lower Lip - Fuller and prominent */}
+        <mesh ref={lowerLipRef} position={[0, -0.06, 0.08]} rotation={[-0.12, 0, 0]}>
+          <capsuleGeometry args={[0.12, 0.68, 20, 32]} />
+          <meshStandardMaterial 
+            color="#ba5068"
+            roughness={0.35}
+            metalness={0.08}
+          />
+        </mesh>
+        
+        {/* Lower lip center fullness */}
+        <mesh position={[0, -0.08, 0.12]}>
+          <sphereGeometry args={[0.08, 24, 24]} />
+          <meshStandardMaterial 
+            color="#c55a70"
+            roughness={0.3}
+            metalness={0.1}
+          />
+        </mesh>
+        
+        {/* Lower lip highlight - glossy */}
+        <mesh position={[0, -0.04, 0.15]}>
+          <capsuleGeometry args={[0.055, 0.42, 12, 24]} />
+          <meshStandardMaterial 
+            color="#e88898"
+            roughness={0.1}
+            metalness={0.25}
+            transparent={true}
+            opacity={0.7}
+          />
+        </mesh>
+        
+        {/* Lip corners */}
+        <mesh position={[-0.36, 0, 0.06]}>
+          <sphereGeometry args={[0.05, 16, 16]} />
+          <meshStandardMaterial color="#b84860" roughness={0.45} />
+        </mesh>
+        <mesh position={[0.36, 0, 0.06]}>
+          <sphereGeometry args={[0.05, 16, 16]} />
+          <meshStandardMaterial color="#b84860" roughness={0.45} />
+        </mesh>
+        
+        {/* Philtrum */}
+        <mesh position={[0, 0.18, 0.08]}>
+          <boxGeometry args={[0.05, 0.15, 0.03]} />
+          <meshStandardMaterial color="#f5cab0" roughness={0.75} />
         </mesh>
       </group>
       
       {/* Chin */}
-      <mesh position={[0, -0.5, 0.9]}>
-        <sphereGeometry args={[0.3, 16, 16]} />
-        <meshStandardMaterial color="#ffd4a3" roughness={0.5} />
+      <mesh position={[0, -0.60, 0.82]} castShadow>
+        <sphereGeometry args={[0.30, 48, 48]} />
+        <meshStandardMaterial color="#f7d5b8" roughness={0.75} />
+      </mesh>
+      
+      {/* Jawline */}
+      <mesh position={[-0.40, -0.45, 0.52]} rotation={[0, 0, -0.25]} castShadow>
+        <capsuleGeometry args={[0.20, 0.35, 16, 32]} />
+        <meshStandardMaterial color="#f5d0b5" roughness={0.8} />
+      </mesh>
+      <mesh position={[0.40, -0.45, 0.52]} rotation={[0, 0, 0.25]} castShadow>
+        <capsuleGeometry args={[0.20, 0.35, 16, 32]} />
+        <meshStandardMaterial color="#f5d0b5" roughness={0.8} />
       </mesh>
     </group>
   );
