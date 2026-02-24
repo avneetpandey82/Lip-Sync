@@ -59,12 +59,17 @@ export class AudioManager {
       }
     };
     
-    // Track timing for lip-sync synchronization
-    this.startTime = this.audioContext.currentTime;
-    this.currentSource = source;
-    source.start(0);
+    // CRITICAL FIX: Schedule audio to start slightly in the future for precise sync
+    // This gives us a deterministic start time that accounts for processing latency
+    const scheduleDelay = 0.05; // 50ms lookahead for stable timing
+    const scheduledStartTime = this.audioContext.currentTime + scheduleDelay;
     
-    console.log(`Playing audio: ${audioBuffer.duration.toFixed(2)}s, Start time: ${this.startTime.toFixed(2)}`);
+    // Track timing for lip-sync synchronization (use scheduled time, not actual)
+    this.startTime = scheduledStartTime;
+    this.currentSource = source;
+    source.start(scheduledStartTime);
+    
+    console.log(`Playing audio: ${audioBuffer.duration.toFixed(2)}s, Start time: ${this.startTime.toFixed(3)}s, Current time: ${this.audioContext.currentTime.toFixed(3)}s`);
   }
   
   /**

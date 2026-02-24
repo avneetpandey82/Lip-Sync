@@ -60,12 +60,13 @@ export function useLipSync() {
     
     if (currentCue) {
       if (currentCue.value !== currentViseme) {
-        console.log(`Time: ${currentTime.toFixed(2)}s -> Viseme: ${currentCue.value}`);
+        console.log(`[Lip Sync] Time: ${currentTime.toFixed(3)}s -> Viseme: ${currentCue.value} (${currentCue.start.toFixed(3)}s - ${currentCue.end.toFixed(3)}s)`);
         setCurrentViseme(currentCue.value);
       }
     } else if (currentTime > 0) {
-      // Default to closed mouth if no cue found
+      // Default to closed mouth if no cue found (past end or before start)
       if (currentViseme !== 'X') {
+        console.log(`[Lip Sync] Time: ${currentTime.toFixed(3)}s -> Rest position (no cue)`);
         setCurrentViseme('X');
       }
     }

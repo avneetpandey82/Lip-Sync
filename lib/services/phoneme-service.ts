@@ -68,8 +68,9 @@ export class PhonemeService {
     const tempFile = path.join(tempDir, `audio-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`);
     
     try {
-      // Write audio to temp file
-      await writeFile(tempFile, audioBuffer);
+      // Convert PCM to WAV format (Rhubarb requires proper WAV headers)
+      const wavBuffer = this.pcmToWav(audioBuffer);
+      await writeFile(tempFile, wavBuffer);
       
       return new Promise((resolve, reject) => {
         const args = [
@@ -108,11 +109,19 @@ export class PhonemeService {
           if (code === 0) {
             try {
               const parsed = JSON.parse(stdout);
+              console.log(`[Rhubarb] Success! Parsed ${parsed.mouthCues?.length || 0} mouth cues`);
+              if (parsed.mouthCues && parsed.mouthCues.length > 0) {
+                console.log(`[Rhubarb] Duration: ${parsed.metadata?.duration || 'unknown'}s`);
+                console.log(`[Rhubarb] Sample cues:`, parsed.mouthCues.slice(0, 5));
+              }
               resolve(parsed);
             } catch (err) {
+              console.error('[Rhubarb] Failed to parse JSON output:', stdout.slice(0, 200));
               reject(new Error(`Failed to parse Rhubarb output: ${err}`));
             }
           } else {
+            console.error(`[Rhubarb] Process exited with code ${code}`);
+            console.error(`[Rhubarb] stderr:`, stderr);
             reject(new Error(`Rhubarb exited with code ${code}: ${stderr}`));
           }
         });
@@ -242,6 +251,48 @@ export class PhonemeService {
       .update(audioBuffer)
       .update(transcript)
       .digest('hex');
+  }
+  
+  /**
+   * Convert raw PCM to WAV format with proper headers
+   * Input: 16-bit PCM, mono, 24kHz (OpenAI TTS format)
+   */
+  private pcmToWav(pcmBuffer: Buffer): Buffer {
+    const sampleRate = 24000;
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    
+    // Calculate sizes
+    const dataSize = pcmBuffer.length;
+    const headerSize = 44;
+    const fileSize = headerSize + dataSize;
+    
+    // Create WAV buffer with header
+    const wavBuffer = Buffer.alloc(headerSize + dataSize);
+    
+    // RIFF header
+    wavBuffer.write('RIFF', 0);
+    wavBuffer.writeUInt32LE(fileSize - 8, 4); // File size - 8
+    wavBuffer.write('WAVE', 8);
+    
+    // fmt chunk
+    wavBuffer.write('fmt ', 12);
+    wavBuffer.writeUInt32LE(16, 16); // fmt chunk size
+    wavBuffer.writeUInt16LE(1, 20); // Audio format (1 = PCM)
+    wavBuffer.writeUInt16LE(numChannels, 22); // Number of channels
+    wavBuffer.writeUInt32LE(sampleRate, 24); // Sample rate
+    wavBuffer.writeUInt32LE(sampleRate * numChannels * bitsPerSample / 8, 28); // Byte rate
+    wavBuffer.writeUInt16LE(numChannels * bitsPerSample / 8, 32); // Block align
+    wavBuffer.writeUInt16LE(bitsPerSample, 34); // Bits per sample
+    
+    // data chunk
+    wavBuffer.write('data', 36);
+    wavBuffer.writeUInt32LE(dataSize, 40); // Data size
+    
+    // Copy PCM data
+    pcmBuffer.copy(wavBuffer, headerSize);
+    
+    return wavBuffer;
   }
   
   /**

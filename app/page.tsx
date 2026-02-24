@@ -190,11 +190,18 @@ export default function HomePage() {
                 <div className="text-sm text-blue-400 mb-2">{progress}</div>
               )}
 
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between text-sm mb-2">
                 <span className="text-gray-400">Current Viseme:</span>
-                <span className="font-mono font-bold text-xl text-white bg-gray-700 px-3 py-1 rounded">
+                <span className="font-mono font-bold text-2xl text-white bg-gray-700 px-4 py-2 rounded">
                   {currentViseme}
                 </span>
+              </div>
+              
+              {/* Debug info */}
+              <div className="text-xs text-gray-500 mt-2 border-t border-gray-700 pt-2">
+                <div className="font-mono">
+                  Debug: Check browser console for detailed timing logs
+                </div>
               </div>
             </div>
           </div>
