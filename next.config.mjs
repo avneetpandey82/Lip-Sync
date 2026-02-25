@@ -6,16 +6,16 @@ const nextConfig = {
       test: /\.(wav|mp3|ogg|glb|gltf)$/,
       type: "asset/resource",
     });
-    
+
     // Ensure proper React resolution for React Three Fiber
     if (!isServer) {
       config.resolve.alias = {
         ...config.resolve.alias,
-        react: require.resolve('react'),
-        'react-dom': require.resolve('react-dom'),
+        react: require.resolve("react"),
+        "react-dom": require.resolve("react-dom"),
       };
     }
-    
+
     return config;
   },
   // Empty turbopack config to acknowledge Turbopack usage

@@ -8,18 +8,18 @@ import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 // Dynamically import AvatarScene with no SSR to avoid React Three Fiber issues
 const AvatarScene = dynamic(
   () => import("@/components/AvatarScene").then((mod) => mod.AvatarScene),
-  { 
+  {
     ssr: false,
     loading: () => (
       <div className="w-full h-[600px] bg-gray-800 rounded-lg flex items-center justify-center">
         <div className="text-gray-400">Loading 3D Avatar...</div>
       </div>
-    )
-  }
+    ),
+  },
 );
 
 export default function HomePage() {
-  const [mode, setMode] = useState<'text' | 'conversation'>('conversation');
+  const [mode, setMode] = useState<"text" | "conversation">("conversation");
   const [inputText, setInputText] = useState(
     "Hello! I am your AI avatar. You can speak to me and I'll respond!",
   );
@@ -38,21 +38,21 @@ export default function HomePage() {
     replay,
     hasAudio,
   } = useLipSync();
-  
+
   const {
     transcript,
     isListening,
     isSupported: isSpeechSupported,
     error: speechError,
     startListening,
-    stopListening
+    stopListening,
   } = useSpeechRecognition();
-  
+
   const error = lipSyncError || speechError;
 
   // Handle speech recognition result
   useEffect(() => {
-    if (transcript && !isListening && mode === 'conversation') {
+    if (transcript && !isListening && mode === "conversation") {
       handleConversation(transcript);
     }
   }, [transcript, isListening, mode]);
@@ -61,7 +61,7 @@ export default function HomePage() {
     if (!inputText.trim()) return;
     await speak(inputText, selectedVoice, speed);
   };
-  
+
   const handleListen = () => {
     if (isListening) {
       stopListening();
@@ -69,44 +69,43 @@ export default function HomePage() {
       startListening();
     }
   };
-  
+
   const handleConversation = async (userMessage: string) => {
     if (isProcessing || isPlaying) return;
-    
+
     setIsProcessing(true);
     setInputText(userMessage);
-    
+
     try {
       // Get AI response
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage,
-          conversationHistory: conversationHistory.slice(-10) // Keep last 10 messages
-        })
+          conversationHistory: conversationHistory.slice(-10), // Keep last 10 messages
+        }),
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to get AI response');
+        throw new Error("Failed to get AI response");
       }
-      
+
       const { reply } = await response.json();
-      
+
       // Update conversation history
       const newHistory = [
         ...conversationHistory,
-        { role: 'user', content: userMessage },
-        { role: 'assistant', content: reply }
+        { role: "user", content: userMessage },
+        { role: "assistant", content: reply },
       ];
       setConversationHistory(newHistory);
-      
+
       // Speak the response
       setInputText(reply);
       await speak(reply, selectedVoice, speed);
-      
     } catch (err: any) {
-      console.error('Conversation error:', err);
+      console.error("Conversation error:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -134,25 +133,25 @@ export default function HomePage() {
           <p className="text-gray-400 text-lg">
             OpenAI Chat • Speech Recognition • Real-Time Lip Sync
           </p>
-          
+
           {/* Mode Toggle */}
           <div className="mt-6 flex justify-center gap-4">
             <button
-              onClick={() => setMode('conversation')}
+              onClick={() => setMode("conversation")}
               className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                mode === 'conversation'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                mode === "conversation"
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
               }`}
             >
               🎤 Conversation Mode
             </button>
             <button
-              onClick={() => setMode('text')}
+              onClick={() => setMode("text")}
               className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                mode === 'text'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                mode === "text"
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
               }`}
             >
               📝 Text Mode
@@ -173,15 +172,21 @@ export default function HomePage() {
                 <div className="flex items-center gap-2">
                   <div
                     className={`w-2 h-2 rounded-full ${
-                      isListening 
-                        ? "bg-red-500 animate-pulse" 
-                        : isPlaying 
-                        ? "bg-green-500 animate-pulse" 
-                        : "bg-gray-600"
+                      isListening
+                        ? "bg-red-500 animate-pulse"
+                        : isPlaying
+                          ? "bg-green-500 animate-pulse"
+                          : "bg-gray-600"
                     }`}
                   />
                   <span className="text-sm font-medium">
-                    {isListening ? "Listening..." : isPlaying ? "Speaking" : isProcessing ? "Thinking..." : "Idle"}
+                    {isListening
+                      ? "Listening..."
+                      : isPlaying
+                        ? "Speaking"
+                        : isProcessing
+                          ? "Thinking..."
+                          : "Idle"}
                   </span>
                 </div>
               </div>
@@ -196,7 +201,7 @@ export default function HomePage() {
                   {currentViseme}
                 </span>
               </div>
-              
+
               {/* Debug info */}
               <div className="text-xs text-gray-500 mt-2 border-t border-gray-700 pt-2">
                 <div className="font-mono">
@@ -273,15 +278,15 @@ export default function HomePage() {
 
             {/* Action Buttons */}
             <div className="flex gap-3">
-              {mode === 'conversation' ? (
+              {mode === "conversation" ? (
                 <>
                   <button
                     onClick={handleListen}
                     disabled={isPlaying || isProcessing || !isSpeechSupported}
                     className={`flex-1 px-6 py-4 ${
-                      isListening 
-                        ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 animate-pulse'
-                        : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800'
+                      isListening
+                        ? "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 animate-pulse"
+                        : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
                     }
                          disabled:from-gray-700 disabled:to-gray-700
                          disabled:cursor-not-allowed rounded-lg font-semibold text-lg
@@ -290,7 +295,7 @@ export default function HomePage() {
                   >
                     {isListening ? "🎤 Listening..." : "🎧 Start Listening"}
                   </button>
-                  
+
                   <button
                     onClick={stop}
                     disabled={!isPlaying && !isListening}
@@ -354,9 +359,10 @@ export default function HomePage() {
             {/* Info Box */}
             <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-4 text-blue-200 text-sm">
               <div className="font-semibold mb-2">
-                💡 {mode === 'conversation' ? 'Conversation Mode' : 'Text Mode'}:
+                💡 {mode === "conversation" ? "Conversation Mode" : "Text Mode"}
+                :
               </div>
-              {mode === 'conversation' ? (
+              {mode === "conversation" ? (
                 <ul className="space-y-1 text-xs list-disc list-inside text-blue-300">
                   <li>Click "Start Listening" and speak your message</li>
                   <li>Your speech is converted to text automatically</li>
