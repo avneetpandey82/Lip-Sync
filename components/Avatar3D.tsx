@@ -35,8 +35,7 @@ export function Avatar3D({ currentViseme, emotionIntensity = 0 }: Avatar3DProps)
   const lowerLipRef = useRef<THREE.Mesh>(null);
   const tongueRef = useRef<THREE.Mesh>(null);
   const teethRef = useRef<THREE.Mesh>(null);
-  const leftEyeRef = useRef<THREE.Mesh>(null);
-  const rightEyeRef = useRef<THREE.Mesh>(null);
+  const eyeRef = useRef<THREE.Mesh>(null);
   const currentVisemeRef = useRef<string>("X");
   const blinkTimer = useRef<number>(0);
 
@@ -89,21 +88,14 @@ export function Avatar3D({ currentViseme, emotionIntensity = 0 }: Avatar3DProps)
     }
     
     const blinkPhase = blinkTimer.current < 0.15 ? 1 - (blinkTimer.current / 0.15) : 1;
-    if (leftEyeRef.current) leftEyeRef.current.scale.y = blinkPhase;
-    if (rightEyeRef.current) rightEyeRef.current.scale.y = blinkPhase;
+    if (eyeRef.current) eyeRef.current.scale.y = blinkPhase;
   });
 
   return (
     <group ref={avatarRef}>
-      {/* HEAD */}
+      {/* FACE */}
       <mesh position={[0, 0, 0]} castShadow receiveShadow>
         <sphereGeometry args={[1, 64, 64]} />
-        <meshStandardMaterial color="#ffd4a3" roughness={0.6} metalness={0.1} />
-      </mesh>
-
-      {/* FACE FRONT */}
-      <mesh position={[0, 0, 0.7]} scale={[0.9, 0.95, 0.4]} castShadow receiveShadow>
-        <sphereGeometry args={[0.85, 32, 32]} />
         <meshStandardMaterial color="#ffe4b8" roughness={0.55} />
       </mesh>
 
@@ -113,95 +105,32 @@ export function Avatar3D({ currentViseme, emotionIntensity = 0 }: Avatar3DProps)
           <sphereGeometry args={[1.05, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.7]} />
           <meshStandardMaterial color="#2a1810" roughness={0.9} />
         </mesh>
-        <mesh position={[-0.75, -0.15, 0.2]} rotation={[0, 0, -0.25]}>
-          <capsuleGeometry args={[0.22, 0.65, 16, 32]} />
-          <meshStandardMaterial color="#2a1810" roughness={0.9} />
-        </mesh>
-        <mesh position={[0.75, -0.15, 0.2]} rotation={[0, 0, 0.25]}>
-          <capsuleGeometry args={[0.22, 0.65, 16, 32]} />
-          <meshStandardMaterial color="#2a1810" roughness={0.9} />
-        </mesh>
       </group>
 
-      {/* NECK */}
-      <mesh position={[0, -1, 0.1]}>
-        <cylinderGeometry args={[0.35, 0.4, 0.8, 32]} />
-        <meshStandardMaterial color="#ffd0a0" roughness={0.65} />
-      </mesh>
-
-      {/* SHOULDERS */}
-      <mesh position={[0, -1.4, 0.05]} scale={[1.8, 0.4, 0.75]}>
-        <capsuleGeometry args={[0.45, 0.5, 32, 64]} />
-        <meshStandardMaterial color="#3a4a5a" roughness={0.65} />
-      </mesh>
-
-      {/* EARS */}
-      <mesh position={[-0.95, 0.05, 0]} rotation={[0, -0.25, -0.12]} castShadow>
-        <capsuleGeometry args={[0.15, 0.45, 16, 32]} />
-        <meshStandardMaterial color="#ffcca0" roughness={0.75} />
-      </mesh>
-      <mesh position={[0.95, 0.05, 0]} rotation={[0, 0.25, 0.12]} castShadow>
-        <capsuleGeometry args={[0.15, 0.45, 16, 32]} />
-        <meshStandardMaterial color="#ffcca0" roughness={0.75} />
-      </mesh>
-
-      {/* EYES */}
+      {/* EYE (centered) */}
       <group position={[0, 0.25, 0.9]}>
-        {/* Left Eye */}
-        <group position={[-0.3, 0, 0]}>
-          <mesh position={[0, 0, 0.05]}>
-            <sphereGeometry args={[0.15, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
-            <meshStandardMaterial color="#ffffff" roughness={0.2} />
-          </mesh>
-          <mesh position={[0, 0, 0.18]}>
-            <circleGeometry args={[0.08, 32]} />
-            <meshStandardMaterial color="#1e5a8a" roughness={0.3} />
-          </mesh>
-          <mesh ref={leftEyeRef} position={[0, 0, 0.19]}>
-            <circleGeometry args={[0.04, 32]} />
-            <meshStandardMaterial color="#000000" />
-          </mesh>
-          <mesh position={[0.03, 0.03, 0.2]}>
-            <circleGeometry args={[0.02, 16]} />
-            <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={3} />
-          </mesh>
-          <mesh position={[0, 0.12, 0.14]} rotation={[0.08, 0, 0]}>
-            <capsuleGeometry args={[0.035, 0.3, 16, 32]} />
-            <meshStandardMaterial color="#ffd4a3" roughness={0.6} />
-          </mesh>
-          <mesh position={[0, 0.25, 0.1]} rotation={[0, 0, -0.08]}>
-            <capsuleGeometry args={[0.035, 0.35, 16, 32]} />
-            <meshStandardMaterial color="#1a120c" roughness={0.95} />
-          </mesh>
-        </group>
-
-        {/* Right Eye */}
-        <group position={[0.3, 0, 0]}>
-          <mesh position={[0, 0, 0.05]}>
-            <sphereGeometry args={[0.15, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
-            <meshStandardMaterial color="#ffffff" roughness={0.2} />
-          </mesh>
-          <mesh position={[0, 0, 0.18]}>
-            <circleGeometry args={[0.08, 32]} />
-            <meshStandardMaterial color="#1e5a8a" roughness={0.3} />
-          </mesh>
-          <mesh ref={rightEyeRef} position={[0, 0, 0.19]}>
-            <circleGeometry args={[0.04, 32]} />
-            <meshStandardMaterial color="#000000" />
-          </mesh>
-          <mesh position={[0.03, 0.03, 0.2]}>
-            <circleGeometry args={[0.02, 16]} />
-            <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={3} />
-          </mesh>
-          <mesh position={[0, 0.12, 0.14]} rotation={[0.08, 0, 0]}>
-            <capsuleGeometry args={[0.035, 0.3, 16, 32]} />
-            <meshStandardMaterial color="#ffd4a3" roughness={0.6} />
-          </mesh>
-          <mesh position={[0, 0.25, 0.1]} rotation={[0, 0, 0.08]}>
-            <capsuleGeometry args={[0.035, 0.35, 16, 32]} />
-            <meshStandardMaterial color="#1a120c" roughness={0.95} />
-          </mesh>
-        </group>
+        <mesh position={[0, 0, 0.05]}>
+          <sphereGeometry args={[0.15, 32, 32, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
+          <meshStandardMaterial color="#ffffff" roughness={0.2} />
+        </mesh>
+        <mesh position={[0, 0, 0.18]}>
+          <circleGeometry args={[0.08, 32]} />
+          <meshStandardMaterial color="#1e5a8a" roughness={0.3} />
+        </mesh>
+        <mesh ref={eyeRef} position={[0, 0, 0.19]}>
+          <circleGeometry args={[0.04, 32]} />
+          <meshStandardMaterial color="#000000" />
+        </mesh>
+        <mesh position={[0.03, 0.03, 0.2]}>
+          <circleGeometry args={[0.02, 16]} />
+          <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={3} />
+        </mesh>
+        
+        {/* EYEBROW */}
+        <mesh position={[0, 0.25, 0.1]} rotation={[0, 0, 0]}>
+          <capsuleGeometry args={[0.035, 0.35, 16, 32]} />
+          <meshStandardMaterial color="#1a120c" roughness={0.95} />
+        </mesh>
       </group>
 
       {/* NOSE */}
@@ -224,7 +153,7 @@ export function Avatar3D({ currentViseme, emotionIntensity = 0 }: Avatar3DProps)
         </mesh>
       </group>
 
-      {/* MOUTH */}
+      {/* LIPS */}
       <group position={[0, -0.25, 1.0]}>
         <mesh ref={mouthRef} position={[0, 0, 0]}>
           <boxGeometry args={[0.6, 0.3, 0.15]} />
@@ -246,31 +175,7 @@ export function Avatar3D({ currentViseme, emotionIntensity = 0 }: Avatar3DProps)
           <capsuleGeometry args={[0.12, 0.65, 24, 48]} />
           <meshStandardMaterial color="#b84865" roughness={0.25} />
         </mesh>
-        <mesh position={[-0.34, 0, 0.07]}>
-          <sphereGeometry args={[0.05, 16, 16]} />
-          <meshStandardMaterial color="#a84560" roughness={0.4} />
-        </mesh>
-        <mesh position={[0.34, 0, 0.07]}>
-          <sphereGeometry args={[0.05, 16, 16]} />
-          <meshStandardMaterial color="#a84560" roughness={0.4} />
-        </mesh>
       </group>
-
-      {/* CHIN */}
-      <mesh position={[0, -0.65, 0.85]} castShadow>
-        <sphereGeometry args={[0.3, 32, 32]} />
-        <meshStandardMaterial color="#ffd4a3" roughness={0.65} />
-      </mesh>
-
-      {/* JAW */}
-      <mesh position={[-0.45, -0.5, 0.6]} rotation={[0, 0, -0.18]} castShadow>
-        <capsuleGeometry args={[0.18, 0.4, 16, 32]} />
-        <meshStandardMaterial color="#ffd0a0" roughness={0.7} />
-      </mesh>
-      <mesh position={[0.45, -0.5, 0.6]} rotation={[0, 0, 0.18]} castShadow>
-        <capsuleGeometry args={[0.18, 0.4, 16, 32]} />
-        <meshStandardMaterial color="#ffd0a0" roughness={0.7} />
-      </mesh>
     </group>
   );
 }
