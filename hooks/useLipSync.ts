@@ -263,11 +263,26 @@ export function useLipSync() {
       
       if (response.ok) {
         const refinedData: PhonemeData = await response.json();
-        phonemeDataRef.current = refinedData.mouthCues;
-        console.log('Phonemes refined with Rhubarb:', refinedData.mouthCues.length, 'cues');
+        const cues = refinedData.mouthCues;
+
+        // Validate Rhubarb coverage: cues must span ≥70% of the audio duration.
+        // If Rhubarb produced sparse/truncated output (e.g. due to a bad dialog
+        // file path), keep the estimated cues that already cover the full audio.
+        const audioDuration = AudioManager.estimateDuration(audioBuffer);
+        const lastCueEnd = cues.length > 0 ? cues[cues.length - 1].end : 0;
+        const coverage = audioDuration > 0 ? lastCueEnd / audioDuration : 0;
+
+        if (coverage < 0.7) {
+          console.warn(
+            `[Rhubarb] Cues only cover ${(coverage * 100).toFixed(0)}% of audio ` +
+            `(${lastCueEnd.toFixed(2)}s / ${audioDuration.toFixed(2)}s) — keeping estimated cues`
+          );
+          return;
+        }
+
+        phonemeDataRef.current = cues;
+        console.log(`Phonemes refined with Rhubarb: ${cues.length} cues (${(coverage * 100).toFixed(0)}% coverage)`);
         setProgress('High-quality lip-sync active');
-        
-        // Clear progress message after 2 seconds
         setTimeout(() => setProgress(''), 2000);
       }
     } catch (err) {

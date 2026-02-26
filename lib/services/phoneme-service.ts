@@ -65,12 +65,21 @@ export class PhonemeService {
    */
   private async runRhubarb(audioBuffer: Buffer, transcript: string): Promise<PhonemeData> {
     const tempDir = os.tmpdir();
-    const tempFile = path.join(tempDir, `audio-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`);
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempFile       = path.join(tempDir, `audio-${id}.wav`);
+    const transcriptFile = path.join(tempDir, `transcript-${id}.txt`);
     
     try {
       // Convert PCM to WAV format (Rhubarb requires proper WAV headers)
       const wavBuffer = this.pcmToWav(audioBuffer);
       await writeFile(tempFile, wavBuffer);
+
+      // Write transcript to a temp file — Rhubarb -d expects a FILE PATH,
+      // not inline text. Passing raw text caused it to silently fall back to
+      // phonetic-only mode, producing sparse/truncated cues.
+      if (transcript && transcript.trim().length > 0) {
+        await writeFile(transcriptFile, transcript.trim(), 'utf8');
+      }
       
       return new Promise((resolve, reject) => {
         const args = [
@@ -79,9 +88,9 @@ export class PhonemeService {
           tempFile
         ];
         
-        // Add transcript if provided (significantly improves accuracy)
+        // Pass transcript FILE path (not inline text) for guided phoneme analysis
         if (transcript && transcript.trim().length > 0) {
-          args.push('-d', transcript);
+          args.push('-d', transcriptFile);
         }
         
         console.log(`Running Rhubarb: ${this.rhubarbPath} ${args.join(' ')}`);
@@ -99,12 +108,9 @@ export class PhonemeService {
         });
         
         proc.on('close', async (code) => {
-          // Cleanup temp file
-          try {
-            await unlink(tempFile);
-          } catch (err) {
-            console.warn('Failed to cleanup temp file:', err);
-          }
+          // Cleanup temp files
+          try { await unlink(tempFile); } catch { /* already gone */ }
+          try { await unlink(transcriptFile); } catch { /* didn't exist */ }
           
           if (code === 0) {
             try {
@@ -137,10 +143,9 @@ export class PhonemeService {
         }, 30000);
       });
     } catch (error) {
-      // Cleanup on error
-      try {
-        await unlink(tempFile);
-      } catch {}
+      // Cleanup both temp files on error
+      try { await unlink(tempFile); } catch {}
+      try { await unlink(transcriptFile); } catch {}
       throw new Error(`Phoneme extraction failed: ${error}`);
     }
   }
