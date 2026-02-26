@@ -24,14 +24,29 @@ export interface PhonemeData {
  */
 export function useLipSync() {
   const [currentViseme, setCurrentViseme] = useState<string>('X');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<string>('');
-  
+  const [nextViseme,    setNextViseme]    = useState<string>('X');
+  const [isPlaying,     setIsPlaying]     = useState(false);
+  // isFetching: true while TTS + phoneme data is being prepared (before audio starts)
+  const [isFetching,    setIsFetching]    = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
+  const [progress,      setProgress]      = useState<string>('');
+  // Reactive hasAudio so the Replay button renders as soon as audio is ready
+  const [hasAudio,      setHasAudio]      = useState(false);
+
   const audioManagerRef = useRef<AudioManager | null>(null);
-  const phonemeDataRef = useRef<MouthCue[]>([]);
+  const phonemeDataRef  = useRef<MouthCue[]>([]);
   const animationFrameRef = useRef<number | undefined>(undefined);
-  const audioBufferRef = useRef<ArrayBuffer | null>(null);
+  const audioBufferRef  = useRef<ArrayBuffer | null>(null);
+
+  // Refs that mirror state — read inside the rAF callback to avoid stale closures.
+  const isPlayingRef     = useRef(false);
+  const currentVisemeRef = useRef('X');
+  const nextVisemeRef    = useRef('X');
+
+  // Keep refs in sync with state
+  useEffect(() => { isPlayingRef.current  = isPlaying;     }, [isPlaying]);
+  useEffect(() => { currentVisemeRef.current = currentViseme; }, [currentViseme]);
+  useEffect(() => { nextVisemeRef.current    = nextViseme;    }, [nextViseme]);
   
   // Initialize audio manager
   useEffect(() => {
@@ -46,10 +61,17 @@ export function useLipSync() {
   }, []);
   
   /**
-   * Update viseme based on current audio playback time
+   * Update viseme based on current audio playback time.
+   *
+   * IMPORTANT: This callback has NO state dependencies — it reads live values
+   * from refs. This prevents the classic React rAF race condition where each
+   * state change creates a new callback reference, triggering the useEffect to
+   * cancel + restart the loop while the old callback also queues a new frame,
+   * resulting in multiple competing animation loops.
    */
   const updateViseme = useCallback(() => {
-    if (!audioManagerRef.current || !isPlaying) return;
+    // Stop loop if no longer playing (checked via ref, not stale state)
+    if (!audioManagerRef.current || !isPlayingRef.current) return;
     
     const currentTime = audioManagerRef.current.getCurrentTime();
     
@@ -59,36 +81,56 @@ export function useLipSync() {
     );
     
     if (currentCue) {
-      if (currentCue.value !== currentViseme) {
+      if (currentCue.value !== currentVisemeRef.current) {
         console.log(`[Lip Sync] Time: ${currentTime.toFixed(3)}s -> Viseme: ${currentCue.value} (${currentCue.start.toFixed(3)}s - ${currentCue.end.toFixed(3)}s)`);
+        currentVisemeRef.current = currentCue.value;
         setCurrentViseme(currentCue.value);
       }
     } else if (currentTime > 0) {
-      // Default to closed mouth if no cue found (past end or before start)
-      if (currentViseme !== 'X') {
-        console.log(`[Lip Sync] Time: ${currentTime.toFixed(3)}s -> Rest position (no cue)`);
+      if (currentVisemeRef.current !== 'X') {
+        currentVisemeRef.current = 'X';
         setCurrentViseme('X');
       }
     }
+
+    // Look-ahead: find the next cue starting within 80 ms
+    const LOOK_AHEAD_S = 0.08;
+    const nextCue = phonemeDataRef.current.find(
+      (cue) => cue.start > currentTime && cue.start <= currentTime + LOOK_AHEAD_S
+    );
+    const nextVal = nextCue?.value ?? 'X';
+    if (nextVal !== nextVisemeRef.current) {
+      nextVisemeRef.current = nextVal;
+      setNextViseme(nextVal);
+    }
     
-    // Continue animation loop
-    animationFrameRef.current = requestAnimationFrame(updateViseme);
-  }, [isPlaying, currentViseme]);
+    // Continue animation loop (only if still playing)
+    if (isPlayingRef.current) {
+      animationFrameRef.current = requestAnimationFrame(updateViseme);
+    }
+  }, []); // Stable — no deps, reads live values from refs
   
   // Start/stop animation loop when playing state changes
   useEffect(() => {
     if (isPlaying) {
+      // Cancel any stale frame before starting fresh
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
       animationFrameRef.current = requestAnimationFrame(updateViseme);
     } else {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = undefined;
       }
+      currentVisemeRef.current = 'X';
       setCurrentViseme('X'); // Reset to rest position
     }
     
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = undefined;
       }
     };
   }, [isPlaying, updateViseme]);
@@ -103,7 +145,9 @@ export function useLipSync() {
     }
     
     setError(null);
-    setIsPlaying(true);
+    // isFetching = true blocks the UI (disables textarea/button) while we prepare audio,
+    // but does NOT start the rAF viseme loop — that only starts when isPlaying = true.
+    setIsFetching(true);
     setProgress('Requesting speech...');
     
     try {
@@ -123,17 +167,12 @@ export function useLipSync() {
         throw new Error(errorData.error || 'TTS request failed');
       }
       
-      // Step 2: Collect audio chunks
+      // Step 2: Collect all audio chunks first
       setProgress('Collecting audio...');
       const reader = ttsResponse.body?.getReader();
       if (!reader) throw new Error('No response body');
       
       const chunks: Uint8Array[] = [];
-      
-      // Estimate phonemes immediately for the full text (rough estimate)
-      // We'll refine this with actual audio duration once collected
-      const roughDuration = text.split(/\s+/).length * 0.4; // ~0.4s per word estimate
-      await getEstimatedPhonemes(text, roughDuration);
       
       while (true) {
         const { done, value } = await reader.read();
@@ -144,29 +183,33 @@ export function useLipSync() {
       // Concatenate all chunks
       const fullAudioBuffer = AudioManager.concatenateChunks(chunks);
       audioBufferRef.current = fullAudioBuffer;
+      setHasAudio(true);
       
-      // Get more accurate phoneme estimate with actual audio duration
+      // Step 3: Get phoneme estimate using the ACTUAL audio duration.
+      // Only one estimate call — with the real duration so timing is accurate.
       const actualDuration = AudioManager.estimateDuration(fullAudioBuffer);
       await getEstimatedPhonemes(text, actualDuration);
       
-      // Start playback with full audio
+      // Step 4: Transition from fetching → playing.
+      // isPlaying = true kicks off the rAF viseme loop, which is now perfectly
+      // aligned because audio starts immediately below.
+      setIsFetching(false);
+      setIsPlaying(true);
       setProgress('Playing...');
-      await audioManagerRef.current.playPCM(fullAudioBuffer);
       
-      // Step 3: Background refinement with Rhubarb
-      setProgress('Refining lip-sync...');
-      refinePhonemes(fullAudioBuffer, text);
-      
-      // Calculate duration and wait for playback to finish
-      const durationMs = AudioManager.estimateDuration(fullAudioBuffer) * 1000;
-      setTimeout(() => {
+      // Start playback — onEnded fires when audio source actually finishes.
+      await audioManagerRef.current.playPCM(fullAudioBuffer, () => {
         setIsPlaying(false);
         setProgress('');
-      }, durationMs);
+      });
+      
+      // Step 5: Background refinement with Rhubarb (non-blocking, updates mid-play if fast)
+      refinePhonemes(fullAudioBuffer, text);
       
     } catch (err) {
       console.error('Speak error:', err);
       setError(err instanceof Error ? err.message : 'Failed to speak');
+      setIsFetching(false);
       setIsPlaying(false);
       setProgress('');
     }
@@ -198,9 +241,16 @@ export function useLipSync() {
    */
   const refinePhonemes = async (audioBuffer: ArrayBuffer, text: string) => {
     try {
-      // Convert ArrayBuffer to base64
+      // Convert ArrayBuffer to base64 using chunked encoding to avoid
+      // V8's maximum-call-stack error for audio buffers larger than ~100 KB.
       const uint8Array = new Uint8Array(audioBuffer);
-      const base64Audio = btoa(String.fromCharCode(...uint8Array));
+      let base64Audio = '';
+      const CHUNK = 8192;
+      for (let i = 0; i < uint8Array.length; i += CHUNK) {
+        base64Audio += btoa(
+          String.fromCharCode(...uint8Array.subarray(i, i + CHUNK))
+        );
+      }
       
       const response = await fetch('/api/phonemes', {
         method: 'POST',
@@ -230,6 +280,7 @@ export function useLipSync() {
    */
   const stop = () => {
     audioManagerRef.current?.stop();
+    setIsFetching(false);
     setIsPlaying(false);
     setCurrentViseme('X');
     setProgress('');
@@ -250,13 +301,10 @@ export function useLipSync() {
     
     try {
       await audioManagerRef.current.init();
-      await audioManagerRef.current.playPCM(audioBufferRef.current);
-      
-      const durationMs = AudioManager.estimateDuration(audioBufferRef.current) * 1000;
-      setTimeout(() => {
+      await audioManagerRef.current.playPCM(audioBufferRef.current, () => {
         setIsPlaying(false);
         setProgress('');
-      }, durationMs);
+      });
     } catch (err) {
       console.error('Replay error:', err);
       setError(err instanceof Error ? err.message : 'Failed to replay');
@@ -267,12 +315,14 @@ export function useLipSync() {
   
   return {
     currentViseme,
+    nextViseme,
     isPlaying,
+    isFetching,
     error,
     progress,
     speak,
     stop,
     replay,
-    hasAudio: audioBufferRef.current !== null
+    hasAudio,
   };
 }

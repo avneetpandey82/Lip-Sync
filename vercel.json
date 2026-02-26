@@ -6,6 +6,7 @@
     }
   },
   "env": {
-    "OPENAI_API_KEY": "@openai-api-key"
+    "OPENAI_API_KEY": "@openai-api-key",
+    "RHUBARB_AVAILABLE": "false"
   }
 }

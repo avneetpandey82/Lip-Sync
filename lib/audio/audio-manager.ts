@@ -23,8 +23,10 @@ export class AudioManager {
   
   /**
    * Play PCM audio buffer
+   * @param pcmData - Raw PCM audio data
+   * @param onEnded - Optional callback fired when playback actually ends
    */
-  async playPCM(pcmData: ArrayBuffer): Promise<void> {
+  async playPCM(pcmData: ArrayBuffer, onEnded?: () => void): Promise<void> {
     if (!this.audioContext) {
       throw new Error('AudioContext not initialized. Call init() first.');
     }
@@ -51,15 +53,16 @@ export class AudioManager {
     source.buffer = audioBuffer;
     source.connect(this.audioContext.destination);
     
-    // Clear currentSource when audio ends
+    // Clear currentSource when audio ends and fire callback
     source.onended = () => {
       if (this.currentSource === source) {
         this.currentSource = null;
         console.log('Audio playback ended');
       }
+      onEnded?.();
     };
     
-    // CRITICAL FIX: Schedule audio to start slightly in the future for precise sync
+    // Schedule audio to start slightly in the future for precise sync
     // This gives us a deterministic start time that accounts for processing latency
     const scheduleDelay = 0.05; // 50ms lookahead for stable timing
     const scheduledStartTime = this.audioContext.currentTime + scheduleDelay;
@@ -73,11 +76,12 @@ export class AudioManager {
   }
   
   /**
-   * Get current playback time in seconds (for lip-sync synchronization)
+   * Get current playback time in seconds (for lip-sync synchronization).
+   * Clamped to >= 0 so the brief schedule-delay window never yields negative time.
    */
   getCurrentTime(): number {
     if (!this.audioContext || !this.currentSource) return 0;
-    return this.audioContext.currentTime - this.startTime;
+    return Math.max(0, this.audioContext.currentTime - this.startTime);
   }
   
   /**

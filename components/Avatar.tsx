@@ -6,44 +6,65 @@ import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
 // ---------------------------------------------------------------------------
-// Rhubarb phoneme → Ready Player Me morph-target mapping
+// Rhubarb phoneme → Wolf3D morph-target mapping
+//
+// This GLB exposes exactly two blend shapes on every SkinnedMesh:
+//   mouthOpen   – jaw drop (0 = closed, 1 = fully open)
+//   mouthSmile  – lip spread (0 = neutral, 1 = full grin)
+//
+// Each Rhubarb letter is mapped to a (mouthOpen, mouthSmile) pair that
+// approximates the articulatory shape for that phoneme group.
 // ---------------------------------------------------------------------------
 interface VisemeTarget {
   name: string;
   weight: number;
 }
 
+// Look-ahead blend weight — 15 % of the NEXT phoneme bleeds into the
+// current frame so transitions feel organic rather than step-function sharp.
+const LOOK_AHEAD_WEIGHT = 0.15;
+
+//  Rhubarb │ Phonemes            │ mouthOpen │ mouthSmile
+//  ────────┼─────────────────────┼───────────┼───────────
+//  X       │ silence / rest      │   0.00    │   0.00
+//  A       │ "ah" (most open)    │   1.00    │   0.05
+//  B       │ m / b / p (closed)  │   0.00    │   0.00
+//  C       │ "oh" (round open)   │   0.65    │   0.00
+//  D       │ th / d / n          │   0.35    │   0.12
+//  E       │ "oo" (tight round)  │   0.20    │   0.00
+//  F       │ f / v               │   0.15    │   0.05
+//  G       │ k / g (velar)       │   0.45    │   0.00
+//  H       │ s / z / sh / "ee"   │   0.22    │   0.48
 const VISEME_MAP: Record<string, VisemeTarget[]> = {
-  X: [{ name: "viseme_sil", weight: 1.0 }],                                  // silence/rest
-  A: [{ name: "viseme_aa",  weight: 1.0 }],                                  // open "ah"
-  B: [{ name: "viseme_PP",  weight: 1.0 }],                                  // bilabial m/b/p → "ee"
-  C: [{ name: "viseme_O",   weight: 1.0 }],                                  // round open "oh"
-  D: [{ name: "viseme_TH",  weight: 0.8 }, { name: "viseme_DD", weight: 0.5 }], // dental "th"
-  E: [{ name: "viseme_U",   weight: 1.0 }],                                  // round tight "oo"
-  F: [{ name: "viseme_FF",  weight: 1.0 }],                                  // labiodental f/v
-  G: [{ name: "viseme_kk",  weight: 1.0 }],                                  // velar k/g
-  H: [{ name: "viseme_SS",  weight: 1.0 }],                                  // sibilant s/z
+  X: [],  // fully closed — both targets reset to 0
+  A: [{ name: "mouthOpen",  weight: 1.00 }, { name: "mouthSmile", weight: 0.05 }],
+  B: [],  // lips pressed — both at 0
+  C: [{ name: "mouthOpen",  weight: 0.65 }],
+  D: [{ name: "mouthOpen",  weight: 0.35 }, { name: "mouthSmile", weight: 0.12 }],
+  E: [{ name: "mouthOpen",  weight: 0.20 }],
+  F: [{ name: "mouthOpen",  weight: 0.15 }, { name: "mouthSmile", weight: 0.05 }],
+  G: [{ name: "mouthOpen",  weight: 0.45 }],
+  H: [{ name: "mouthOpen",  weight: 0.22 }, { name: "mouthSmile", weight: 0.48 }],
 };
 
-// All RPM morph-target names we ever touch (for reset)
-const ALL_VISEME_TARGETS = [
-  "viseme_sil", "viseme_aa", "viseme_PP", "viseme_FF",
-  "viseme_TH",  "viseme_DD", "viseme_kk", "viseme_CH",
-  "viseme_SS",  "viseme_nn", "viseme_RR", "viseme_E",
-  "viseme_I",   "viseme_O",  "viseme_U",
-];
+// The two targets present in this Wolf3D GLB — used for per-frame reset
+const ALL_VISEME_TARGETS = ["mouthOpen", "mouthSmile"];
 
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 interface AvatarProps {
   currentViseme: string;
+  /** Next queued viseme (from look-ahead in useLipSync) */
+  nextViseme: string;
+  /** Whether audio is currently playing (suppresses idle breathing) */
+  isPlaying: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // Avatar — loaded from /public/avatar.glb (Ready Player Me full-body .glb)
 // ---------------------------------------------------------------------------
-export function Avatar({ currentViseme }: AvatarProps) {
+export function Avatar({ currentViseme, nextViseme, isPlaying }: AvatarProps) {
   const groupRef    = useRef<THREE.Group>(null);
   const { scene }   = useGLTF("/avatar.glb");
 
@@ -94,17 +115,22 @@ export function Avatar({ currentViseme }: AvatarProps) {
   useEffect(() => {
     const weights: Record<string, number> = {};
     ALL_VISEME_TARGETS.forEach((t) => (weights[t] = 0));
-    const targets = VISEME_MAP[currentViseme] ?? VISEME_MAP["X"];
-    targets.forEach(({ name, weight }) => (weights[name] = weight));
-    targetWeights.current = weights;
-  }, [currentViseme]);
 
-  // ---- Blink state --------------------------------------------------------
-  const blinkState = useRef({
-    nextBlink:     Date.now() + 2500 + Math.random() * 2000,
-    blinking:      false,
-    blinkProgress: 0,
-  });
+    // Primary viseme
+    const primary = VISEME_MAP[currentViseme] ?? VISEME_MAP["X"];
+    primary.forEach(({ name, weight }) => (weights[name] = weight));
+
+    // Look-ahead: blend 15% of the next viseme into the current target so
+    // transitions between phonemes are organic rather than frame-step sharp.
+    if (nextViseme && nextViseme !== currentViseme) {
+      const ahead = VISEME_MAP[nextViseme] ?? VISEME_MAP["X"];
+      ahead.forEach(({ name, weight }) => {
+        weights[name] = Math.min(1, (weights[name] ?? 0) + weight * LOOK_AHEAD_WEIGHT);
+      });
+    }
+
+    targetWeights.current = weights;
+  }, [currentViseme, nextViseme]);
 
   // ---- Idle breath state --------------------------------------------------
   const breathTime = useRef(0);
@@ -134,40 +160,22 @@ export function Avatar({ currentViseme }: AvatarProps) {
       });
     });
 
-    // ---- Eye blink ---------------------------------------------------------
-    const blink = blinkState.current;
-    const now   = Date.now();
-
-    if (!blink.blinking && now >= blink.nextBlink) {
-      blink.blinking      = true;
-      blink.blinkProgress = 0;
-    }
-
-    if (blink.blinking) {
-      blink.blinkProgress += delta * 14; // total ~130 ms for full blink cycle
-      const influence = Math.sin(Math.min(blink.blinkProgress, Math.PI));
-
-      morphMeshes.forEach((mesh) => {
-        if (!mesh.morphTargetDictionary || !mesh.morphTargetInfluences) return;
-        (["eyeBlinkLeft", "eyeBlinkRight"] as const).forEach((name) => {
-          const idx = mesh.morphTargetDictionary![name];
-          if (idx !== undefined) mesh.morphTargetInfluences![idx] = influence;
-        });
-      });
-
-      if (blink.blinkProgress >= Math.PI) {
-        blink.blinking   = false;
-        blink.nextBlink  = Date.now() + 2500 + Math.random() * 2000;
-      }
-    }
-
-    // ---- Idle breathing ----------------------------------------------------
+    // ---- Idle breathing / speech head-nod ---------------------------------
     breathTime.current += delta * 0.7;
-    // Add breathing ON TOP of the auto-offset (don't replace it)
-    groupRef.current.position.y =
-      autoOffset.current.y +
-      Math.sin(breathTime.current) * 0.0035 +
-      Math.sin(breathTime.current * 2.3) * 0.001;
+
+    if (isPlaying) {
+      // While speaking: suppress chest rise, add subtle 4 Hz head-nod that
+      // makes the avatar feel alive rather than a static talking statue.
+      groupRef.current.position.y =
+        autoOffset.current.y +
+        Math.sin(breathTime.current * (4 / 0.7)) * 0.002;
+    } else {
+      // Idle: full breathing cycle (primary 0.7 Hz + 2nd harmonic)
+      groupRef.current.position.y =
+        autoOffset.current.y +
+        Math.sin(breathTime.current) * 0.0035 +
+        Math.sin(breathTime.current * 2.3) * 0.001;
+    }
   });
 
   return (

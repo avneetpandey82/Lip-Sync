@@ -10,6 +10,8 @@ import { Avatar } from "./Avatar";
 // ---------------------------------------------------------------------------
 interface AvatarSceneProps {
   currentViseme: string;
+  nextViseme: string;
+  isPlaying: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,10 +185,10 @@ function LoadingAvatar() {
 // ---------------------------------------------------------------------------
 // AvatarScene — exported, received by page.tsx
 // ---------------------------------------------------------------------------
-export function AvatarScene({ currentViseme }: AvatarSceneProps) {
+export function AvatarScene({ currentViseme, nextViseme, isPlaying }: AvatarSceneProps) {
   return (
     <div
-      className="w-full h-[600px] rounded-xl overflow-hidden shadow-2xl"
+      className="w-full h-full overflow-hidden"
       style={{ background: "#0d1220", position: "relative" }}
     >
       <Canvas
@@ -257,7 +259,11 @@ export function AvatarScene({ currentViseme }: AvatarSceneProps) {
         {/* ── Avatar (GLB) with error + loading fallbacks ─────────────────── */}
         <AvatarErrorBoundary fallback={<FallbackHead />}>
           <Suspense fallback={<LoadingAvatar />}>
-            <Avatar currentViseme={currentViseme} />
+            <Avatar
+              currentViseme={currentViseme}
+              nextViseme={nextViseme}
+              isPlaying={isPlaying}
+            />
           </Suspense>
         </AvatarErrorBoundary>
 
