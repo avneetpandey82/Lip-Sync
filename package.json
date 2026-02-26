@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "git:personal": "git config --global user.name \"avneetpandey82\" && git config --global user.email \"avneetpandey@gmail.com\" && ssh-add ~/.ssh/id_avneetpandeypersonal"
   },
   "dependencies": {
     "@react-three/drei": "^10.0.0",
