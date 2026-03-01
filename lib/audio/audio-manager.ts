@@ -62,9 +62,9 @@ export class AudioManager {
       onEnded?.();
     };
     
-    // Schedule audio to start slightly in the future for precise sync
-    // This gives us a deterministic start time that accounts for processing latency
-    const scheduleDelay = 0.05; // 50ms lookahead for stable timing
+    // Start audio immediately — a non-zero delay creates a window where the
+    // viseme animation runs but no audio plays, causing early-viseme drift.
+    const scheduleDelay = 0.0;
     const scheduledStartTime = this.audioContext.currentTime + scheduleDelay;
     
     // Track timing for lip-sync synchronization (use scheduled time, not actual)

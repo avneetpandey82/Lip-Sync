@@ -279,53 +279,106 @@ export interface PhonemeData {
  * fallback in phoneme-service.ts while remaining 100% serverless-safe (no binary).
  */
 export function estimateWithCMU(text: string, durationSeconds: number): PhonemeData {
-  const words = text
-    .split(/[\s\-—]+/)
-    .map((w) => w.replace(/[^a-zA-Z']/g, ''))
-    .filter((w) => w.length > 0);
+  // -------------------------------------------------------------------------
+  // 1. Tokenise — preserve trailing punctuation to detect natural pause sizes.
+  // -------------------------------------------------------------------------
+  interface Token { word: string; rawPause: number; }
 
-  if (words.length === 0) {
+  const SENTENCE_PAUSE = 0.22;  // . ! ?  — full breath between sentences
+  const CLAUSE_PAUSE   = 0.10;  // ,  ; : — brief clause boundary
+  const WORD_PAUSE     = 0.03;  // normal inter-word gap
+
+  const rawTokens: Token[] = text
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map((raw): Token => {
+      const lastChar = raw.slice(-1);
+      const cleanWord = raw.replace(/[^a-zA-Z']/g, '');
+      let rawPause = WORD_PAUSE;
+      if ('.!?…'.includes(lastChar)) rawPause = SENTENCE_PAUSE;
+      else if (',;:—'.includes(lastChar)) rawPause = CLAUSE_PAUSE;
+      return { word: cleanWord, rawPause };
+    })
+    .filter((t) => t.word.length > 0);
+
+  if (rawTokens.length === 0) {
     return { mouthCues: [{ start: 0, end: durationSeconds, value: 'X' }] };
   }
 
-  // Estimate ~12 phonemes per second at natural speech rate, but distribute
-  // proportionally to word length so longer words get more time.
-  const totalPhonemes = words.reduce(
-    (sum, w) => sum + Math.max(1, wordToRhubarb(w).length),
+  // -------------------------------------------------------------------------
+  // 2. Time budget
+  //    • 40 ms initial silence  – TTS audio typically has a short silent lead-in.
+  //    • 85 % speaking time     – distributed proportionally to phoneme count.
+  //    • 15 % pause time        – scaled from raw punctuation weights above.
+  //    • 35 ms min per phoneme  – prevents sub-perceptual flickers.
+  // -------------------------------------------------------------------------
+  const INITIAL_SILENCE  = Math.min(0.04, durationSeconds * 0.05);
+  const MIN_PHONEME_DUR  = 0.035; // 35 ms
+
+  const phaseTime   = durationSeconds - INITIAL_SILENCE;
+  const totalRaw    = rawTokens.reduce((s, t) => s + t.rawPause, 0);
+  const PAUSE_BUDGET  = phaseTime * 0.15;
+  const pauseScale    = PAUSE_BUDGET / Math.max(totalRaw, 0.001);
+
+  const tokens = rawTokens.map((t) => ({
+    ...t,
+    scaledPause: t.rawPause * pauseScale,
+  }));
+
+  const SPEECH_BUDGET = phaseTime * 0.85;
+  const totalPhonemes = tokens.reduce(
+    (sum, t) => sum + Math.max(1, wordToRhubarb(t.word).length),
     0
   );
+  const baseTimePerPhoneme = SPEECH_BUDGET / Math.max(totalPhonemes, 1);
 
+  // -------------------------------------------------------------------------
+  // 3. Build mouth cues
+  // -------------------------------------------------------------------------
   const mouthCues: MouthCue[] = [];
-  let currentTime = 0;
-  const timePerPhoneme = (durationSeconds * 0.88) / Math.max(totalPhonemes, 1);
-  const interWordPause = (durationSeconds * 0.12) / Math.max(words.length, 1);
+  let currentTime = INITIAL_SILENCE;
 
-  for (const word of words) {
-    const phonemes = wordToRhubarb(word);
+  for (const token of tokens) {
+    const phonemes = wordToRhubarb(token.word);
 
     for (const p of phonemes) {
-      const duration = timePerPhoneme * (isVowel(p) ? 1.15 : 0.85);
-      mouthCues.push({
-        start: currentTime,
-        end:   currentTime + duration,
-        value: p,
-      });
-      currentTime += duration;
+      // Vowels are naturally longer; consonants are shorter
+      const rawDur  = baseTimePerPhoneme * (isVowel(p) ? 1.2 : 0.8);
+      const dur     = Math.max(rawDur, MIN_PHONEME_DUR);
+      mouthCues.push({ start: currentTime, end: currentTime + dur, value: p });
+      currentTime += dur;
     }
 
-    // Brief rest between words
-    if (interWordPause > 0.015) {
-      mouthCues.push({
-        start: currentTime,
-        end:   currentTime + interWordPause,
-        value: 'X',
-      });
+    // Post-word pause (silence cue for noticeable pauses only)
+    const pauseDur = token.scaledPause;
+    if (pauseDur > 0.01) {
+      mouthCues.push({ start: currentTime, end: currentTime + pauseDur, value: 'X' });
     }
-    currentTime += interWordPause;
+    currentTime += pauseDur;
+  }
+
+  // -------------------------------------------------------------------------
+  // 4. Align final cue to exact audio duration so nothing snaps shut early.
+  // -------------------------------------------------------------------------
+  const lastCue = mouthCues[mouthCues.length - 1];
+  if (lastCue) {
+    if (currentTime < durationSeconds) {
+      // Extend last cue to fill the tail
+      lastCue.end = durationSeconds;
+    } else if (currentTime > durationSeconds + 0.01) {
+      // Slightly over budget — trim and add tail silence if needed
+      const overshoot = currentTime - durationSeconds;
+      lastCue.end = Math.max(lastCue.start + 0.02, lastCue.end - overshoot);
+      if (lastCue.end < durationSeconds) {
+        mouthCues.push({ start: lastCue.end, end: durationSeconds, value: 'X' });
+      }
+    }
   }
 
   console.log(
-    `[CMU] Estimated ${mouthCues.length} cues for "${text.slice(0, 60)}" (${durationSeconds.toFixed(2)}s)`
+    `[CMU] Estimated ${mouthCues.length} cues for "${text.slice(0, 60)}" ` +
+    `(${durationSeconds.toFixed(2)}s, lead=${INITIAL_SILENCE.toFixed(3)}s)`
   );
 
   return { mouthCues };

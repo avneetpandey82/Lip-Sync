@@ -93,8 +93,9 @@ export function useLipSync() {
       }
     }
 
-    // Look-ahead: find the next cue starting within 80 ms
-    const LOOK_AHEAD_S = 0.08;
+    // Look-ahead: find the next cue starting within 50 ms
+    // Smaller window avoids anticipating visemes too early at natural speech rate.
+    const LOOK_AHEAD_S = 0.05;
     const nextCue = phonemeDataRef.current.find(
       (cue) => cue.start > currentTime && cue.start <= currentTime + LOOK_AHEAD_S
     );

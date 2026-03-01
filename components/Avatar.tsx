@@ -167,7 +167,9 @@ export function Avatar({ currentViseme, nextViseme, isPlaying }: AvatarProps) {
 
         const current = mesh.morphTargetInfluences![idx] ?? 0;
         const target  = weights[name] ?? 0;
-        const rate    = target > current ? 60 : 18;
+        // Attack 80/s → reaches 99% in ~2–3 frames (snappier onset).
+        // Decay  28/s → faster jaw close so silence gaps read correctly.
+        const rate    = target > current ? 80 : 28;
 
         mesh.morphTargetInfluences![idx] = THREE.MathUtils.lerp(
           current,
