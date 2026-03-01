@@ -20,9 +20,16 @@ interface VisemeTarget {
   weight: number;
 }
 
-// Look-ahead blend weight — 25 % of the NEXT phoneme bleeds into the
+// Look-ahead blend weight — 20 % of the NEXT phoneme bleeds into the
 // current frame so transitions feel organic rather than step-function sharp.
-const LOOK_AHEAD_WEIGHT = 0.25;
+const LOOK_AHEAD_WEIGHT = 0.20;
+
+// Silence gate: amplitude below this level → mouth closes regardless of phoneme.
+// Prevents the jaw hanging open during inter-word or inter-sentence pauses.
+const SILENCE_THRESHOLD = 0.07;
+// Floor for consonants (B/F/G/D) — these have near-zero mouthOpen already,
+// but a small floor stops their shape fully disappearing on soft consonants.
+const CONSONANT_AMP_FLOOR = 0.10;
 
 //  Rhubarb │ Phonemes            │ mouthOpen │ mouthSmile
 //  ────────┼─────────────────────┼───────────┼───────────
@@ -75,12 +82,19 @@ interface AvatarProps {
   nextViseme: string;
   /** Whether audio is currently playing (suppresses idle breathing) */
   isPlaying: boolean;
+  /**
+   * Instantaneous RMS amplitude from the PCM waveform [0–1].
+   * Used to gate and scale mouthOpen so the jaw tracks actual speech energy:
+   *   • silence gaps  → mouth closes even if phoneme says open
+   *   • stressed vowels → mouth opens proportionally wider
+   */
+  mouthAmplitude: number;
 }
 
 // ---------------------------------------------------------------------------
 // Avatar — loaded from /public/avatar.glb (Ready Player Me full-body .glb)
 // ---------------------------------------------------------------------------
-export function Avatar({ currentViseme, nextViseme, isPlaying }: AvatarProps) {
+export function Avatar({ currentViseme, nextViseme, isPlaying, mouthAmplitude }: AvatarProps) {
   const groupRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF("/avatar.glb");
 
@@ -125,11 +139,12 @@ export function Avatar({ currentViseme, nextViseme, isPlaying }: AvatarProps) {
 
   // Synchronous render-time refs — updated during render so useFrame always
   // reads the current viseme on the very next rAF tick with zero lag.
-  // (useEffect fires AFTER paint, which would make every frame one tick stale.)
-  const currentVisemeRef = useRef(currentViseme);
-  const nextVisemeRef    = useRef(nextViseme);
-  currentVisemeRef.current = currentViseme;
-  nextVisemeRef.current    = nextViseme;
+  const currentVisemeRef    = useRef(currentViseme);
+  const nextVisemeRef       = useRef(nextViseme);
+  const mouthAmplitudeRef   = useRef(mouthAmplitude);
+  currentVisemeRef.current  = currentViseme;
+  nextVisemeRef.current     = nextViseme;
+  mouthAmplitudeRef.current = mouthAmplitude;
 
   // ---- Idle breath state --------------------------------------------------
   const breathTime = useRef(0);
@@ -139,8 +154,9 @@ export function Avatar({ currentViseme, nextViseme, isPlaying }: AvatarProps) {
     if (!groupRef.current) return;
 
     // Build target weights inline from render-time refs (zero stale-closure lag).
-    const cv = currentVisemeRef.current;
-    const nv = nextVisemeRef.current;
+    const cv  = currentVisemeRef.current;
+    const nv  = nextVisemeRef.current;
+    const amp = mouthAmplitudeRef.current; // 0–1 RMS amplitude
 
     const weights: Record<string, number> = {};
     ALL_VISEME_TARGETS.forEach((t) => (weights[t] = 0));
@@ -155,6 +171,26 @@ export function Avatar({ currentViseme, nextViseme, isPlaying }: AvatarProps) {
       });
     }
 
+    // ── Amplitude-gate mouthOpen ───────────────────────────────────────────
+    // Scale mouthOpen by actual speech energy from the PCM waveform.
+    // • Below SILENCE_THRESHOLD → jaw closes (mouth tracks silence gaps).
+    // • Above threshold          → smooth ramp so stressed vowels open wider.
+    // mouthSmile is a SHAPE target, not energy, so it is NOT gated by amplitude.
+    if (isPlaying) {
+      // Smooth gate: 0 at silence threshold, 1 at full amplitude
+      const gate = amp < SILENCE_THRESHOLD
+        ? 0
+        : Math.pow((amp - SILENCE_THRESHOLD) / (1.0 - SILENCE_THRESHOLD), 0.65);
+
+      const rawOpen = weights['mouthOpen'] ?? 0;
+      // Consonants (B/D/F/G) have rawOpen ≤ 0.45; give them a soft floor so
+      // shape is preserved even when amplitude is low (e.g. voiceless stops).
+      if (rawOpen > 0) {
+        const floor = rawOpen < 0.25 ? CONSONANT_AMP_FLOOR : 0;
+        weights['mouthOpen'] = rawOpen * Math.max(gate, floor);
+      }
+    }
+
     // Exponential lerp — frame-rate independent.
     // Attack 60/s → reaches 99 % target in ~3 frames (50 ms at 60fps).
     // Decay  18/s → smooth natural jaw close.
@@ -167,9 +203,10 @@ export function Avatar({ currentViseme, nextViseme, isPlaying }: AvatarProps) {
 
         const current = mesh.morphTargetInfluences![idx] ?? 0;
         const target  = weights[name] ?? 0;
-        // Attack 80/s → reaches 99% in ~2–3 frames (snappier onset).
-        // Decay  28/s → faster jaw close so silence gaps read correctly.
-        const rate    = target > current ? 80 : 28;
+        // Attack 120/s → 99% in ~2 frames at 60 fps (instant-feeling onset).
+        // Decay   22/s → gradual close so silence gaps read as natural pauses
+        //                rather than a snapping-shut mouth.
+        const rate = target > current ? 120 : 22;
 
         mesh.morphTargetInfluences![idx] = THREE.MathUtils.lerp(
           current,

@@ -231,38 +231,53 @@ function applyRules(s: string): [string, number] | null {
   return null;
 }
 
-function wordToRhubarb(word: string): string[] {
+// Stress multipliers for vowel duration.
+// stress 1 (primary)   → vowel is noticeably longer and more open
+// stress 2 (secondary) → slightly elongated
+// stress 0 (unstressed)→ reduced/shorter (schwa-like)
+// -1       (consonant) → fixed, no stress
+const STRESS_SCALE: Record<number, number> = { 1: 1.45, 2: 1.15, 0: 0.65, [-1]: 1.0 };
+
+interface PhonemeToken { r: string; stress: number; }
+
+function wordToRhubarb(word: string): PhonemeToken[] {
   const lower = word.toLowerCase().replace(/[^a-z]/g, '');
   if (!lower) return [];
 
-  // Try dictionary first
+  // Try dictionary first — ARPAbet entries carry stress numbers (e.g. "AH0", "EY1")
   const dictEntry = WORD_DICT[lower];
   if (dictEntry) {
     return dictEntry.map((arpa) => {
-      // Strip stress numbers from ARPAbet (e.g. "AH1" → "AH")
-      const base = arpa.replace(/[0-9]/g, '');
-      return ARPABET_TO_RHUBARB[base] ?? 'A';
+      const stressMatch = arpa.match(/([012])$/);
+      const stress      = stressMatch ? parseInt(stressMatch[1]) : -1; // -1 = consonant
+      const base        = arpa.replace(/[0-9]/g, '');
+      const r           = ARPABET_TO_RHUBARB[base] ?? 'A';
+      return { r, stress };
     });
   }
 
-  // Fall back to G2P rules
-  const result: string[] = [];
+  // Fall back to G2P rules — mark guessed vowels as primary stress (sane default)
+  const result: PhonemeToken[] = [];
   let remaining = lower;
   let safety = 0;
+  let vowelSeen = false;
 
   while (remaining.length > 0 && safety++ < 60) {
     const match = applyRules(remaining);
     if (match) {
-      const [rhubarb, advance] = match;
-      result.push(rhubarb);
+      const [r, advance] = match;
+      const isVow = ['A','C','E','H'].includes(r);
+      // Mark first vowel of G2P words as primary stress, rest unstressed
+      const stress = isVow ? (vowelSeen ? 0 : 1) : -1;
+      if (isVow) vowelSeen = true;
+      result.push({ r, stress });
       remaining = remaining.slice(advance);
     } else {
-      // Unknown char — skip silently
       remaining = remaining.slice(1);
     }
   }
 
-  return result.length ? result : ['A', 'X'];
+  return result.length ? result : [{ r: 'A', stress: 1 }, { r: 'X', stress: -1 }];
 }
 
 // ---------------------------------------------------------------------------
@@ -275,8 +290,8 @@ export interface PhonemeData {
 
 /**
  * Estimate phoneme cues from text + duration using the CMU dictionary + G2P.
- * Produces noticeably more accurate mouth shapes than the character-by-character
- * fallback in phoneme-service.ts while remaining 100% serverless-safe (no binary).
+ * Stress markers from the CMU dict drive vowel duration so stressed syllables
+ * open the jaw wider/longer — much closer to natural speech rhythm.
  */
 export function estimateWithCMU(text: string, durationSeconds: number): PhonemeData {
   // -------------------------------------------------------------------------
@@ -308,49 +323,54 @@ export function estimateWithCMU(text: string, durationSeconds: number): PhonemeD
 
   // -------------------------------------------------------------------------
   // 2. Time budget
-  //    • 40 ms initial silence  – TTS audio typically has a short silent lead-in.
-  //    • 85 % speaking time     – distributed proportionally to phoneme count.
-  //    • 15 % pause time        – scaled from raw punctuation weights above.
-  //    • 35 ms min per phoneme  – prevents sub-perceptual flickers.
+  //    • 20 ms initial silence  – Coral voice typically starts quickly.
+  //    • 84 % speaking time     – distributed proportionally to STRESS-WEIGHTED
+  //                               phoneme count so stressed vowels get more time.
+  //    • 16 % pause time        – scaled from punctuation weights above.
+  //    • 30 ms min per phoneme  – prevents sub-perceptual flickers.
   // -------------------------------------------------------------------------
-  const INITIAL_SILENCE  = Math.min(0.04, durationSeconds * 0.05);
-  const MIN_PHONEME_DUR  = 0.035; // 35 ms
+  const INITIAL_SILENCE = Math.min(0.02, durationSeconds * 0.03);
+  const MIN_PHONEME_DUR = 0.030; // 30 ms
 
-  const phaseTime   = durationSeconds - INITIAL_SILENCE;
-  const totalRaw    = rawTokens.reduce((s, t) => s + t.rawPause, 0);
-  const PAUSE_BUDGET  = phaseTime * 0.15;
-  const pauseScale    = PAUSE_BUDGET / Math.max(totalRaw, 0.001);
+  const phaseTime  = durationSeconds - INITIAL_SILENCE;
+  const totalRaw   = rawTokens.reduce((s, t) => s + t.rawPause, 0);
+  const PAUSE_BUDGET = phaseTime * 0.16;
+  const pauseScale   = PAUSE_BUDGET / Math.max(totalRaw, 0.001);
 
   const tokens = rawTokens.map((t) => ({
     ...t,
     scaledPause: t.rawPause * pauseScale,
+    phonemes: wordToRhubarb(t.word), // PhonemeToken[]
   }));
 
-  const SPEECH_BUDGET = phaseTime * 0.85;
-  const totalPhonemes = tokens.reduce(
-    (sum, t) => sum + Math.max(1, wordToRhubarb(t.word).length),
-    0
+  // Compute stress-weighted phoneme total so we can size the base unit correctly
+  const SPEECH_BUDGET       = phaseTime * 0.84;
+  const totalWeightedPhonemes = tokens.reduce(
+    (sum, t) => sum + t.phonemes.reduce(
+      (ws, p) => ws + STRESS_SCALE[p.stress] * (isVowel(p.r) ? 1.2 : 0.8), 0
+    ),
+    0,
   );
-  const baseTimePerPhoneme = SPEECH_BUDGET / Math.max(totalPhonemes, 1);
+  const baseTimePerUnit = SPEECH_BUDGET / Math.max(totalWeightedPhonemes, 1);
 
   // -------------------------------------------------------------------------
-  // 3. Build mouth cues
+  // 3. Build mouth cues (stress-aware duration per phoneme)
   // -------------------------------------------------------------------------
   const mouthCues: MouthCue[] = [];
   let currentTime = INITIAL_SILENCE;
 
   for (const token of tokens) {
-    const phonemes = wordToRhubarb(token.word);
-
-    for (const p of phonemes) {
-      // Vowels are naturally longer; consonants are shorter
-      const rawDur  = baseTimePerPhoneme * (isVowel(p) ? 1.2 : 0.8);
-      const dur     = Math.max(rawDur, MIN_PHONEME_DUR);
-      mouthCues.push({ start: currentTime, end: currentTime + dur, value: p });
+    for (const { r, stress } of token.phonemes) {
+      // Stressed vowels open longer; unstressed vowels are short/clipped
+      const stressMul = STRESS_SCALE[stress] ?? 1.0;
+      const shapeMul  = isVowel(r) ? 1.2 : 0.8;
+      const rawDur    = baseTimePerUnit * stressMul * shapeMul;
+      const dur       = Math.max(rawDur, MIN_PHONEME_DUR);
+      mouthCues.push({ start: currentTime, end: currentTime + dur, value: r });
       currentTime += dur;
     }
 
-    // Post-word pause (silence cue for noticeable pauses only)
+    // Post-word pause (silence cue only for perceptible gaps)
     const pauseDur = token.scaledPause;
     if (pauseDur > 0.01) {
       mouthCues.push({ start: currentTime, end: currentTime + pauseDur, value: 'X' });
@@ -364,10 +384,8 @@ export function estimateWithCMU(text: string, durationSeconds: number): PhonemeD
   const lastCue = mouthCues[mouthCues.length - 1];
   if (lastCue) {
     if (currentTime < durationSeconds) {
-      // Extend last cue to fill the tail
       lastCue.end = durationSeconds;
     } else if (currentTime > durationSeconds + 0.01) {
-      // Slightly over budget — trim and add tail silence if needed
       const overshoot = currentTime - durationSeconds;
       lastCue.end = Math.max(lastCue.start + 0.02, lastCue.end - overshoot);
       if (lastCue.end < durationSeconds) {

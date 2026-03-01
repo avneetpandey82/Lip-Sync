@@ -12,6 +12,7 @@ interface AvatarSceneProps {
   currentViseme: string;
   nextViseme: string;
   isPlaying: boolean;
+  mouthAmplitude: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +186,7 @@ function LoadingAvatar() {
 // ---------------------------------------------------------------------------
 // AvatarScene — exported, received by page.tsx
 // ---------------------------------------------------------------------------
-export function AvatarScene({ currentViseme, nextViseme, isPlaying }: AvatarSceneProps) {
+export function AvatarScene({ currentViseme, nextViseme, isPlaying, mouthAmplitude }: AvatarSceneProps) {
   return (
     <div
       className="w-full h-full overflow-hidden"
@@ -263,6 +264,7 @@ export function AvatarScene({ currentViseme, nextViseme, isPlaying }: AvatarScen
               currentViseme={currentViseme}
               nextViseme={nextViseme}
               isPlaying={isPlaying}
+              mouthAmplitude={mouthAmplitude}
             />
           </Suspense>
         </AvatarErrorBoundary>

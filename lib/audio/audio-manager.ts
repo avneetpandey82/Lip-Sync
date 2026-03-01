@@ -174,6 +174,51 @@ export class AudioManager {
     const samples = pcmData.byteLength / 2; // 16-bit = 2 bytes per sample
     return samples / sampleRate;
   }
+
+  /**
+   * Extract normalised RMS amplitude envelope from 16-bit PCM audio.
+   *
+   * Returns a Float32Array where each element is the normalised [0–1] RMS
+   * energy for one time window.  At fps=100 each window is 10 ms — fine enough
+   * to follow individual phoneme onsets without being noisy.
+   *
+   * Used by useLipSync to modulate jaw-open in real time so the mouth tracks
+   * actual speech energy rather than a flat text-estimated weight.
+   */
+  static extractAmplitudeEnvelope(
+    pcmData:    ArrayBuffer,
+    fps:        number = 100,   // frames per second (10 ms windows at 100)
+    sampleRate: number = 24000,
+  ): Float32Array {
+    const pcm16          = new Int16Array(pcmData);
+    const samplesPerFrame = Math.ceil(sampleRate / fps);
+    const numFrames       = Math.ceil(pcm16.length / samplesPerFrame);
+    const envelope        = new Float32Array(numFrames);
+
+    // Per-frame RMS
+    for (let f = 0; f < numFrames; f++) {
+      const start = f * samplesPerFrame;
+      const end   = Math.min(start + samplesPerFrame, pcm16.length);
+      let sumSq   = 0;
+      for (let i = start; i < end; i++) {
+        const s = pcm16[i] / 32768.0;
+        sumSq  += s * s;
+      }
+      envelope[f] = Math.sqrt(sumSq / (end - start));
+    }
+
+    // Normalise to [0, 1] relative to the loudest frame in this clip
+    let peak = 0;
+    for (let i = 0; i < numFrames; i++) if (envelope[i] > peak) peak = envelope[i];
+    if (peak > 0) for (let i = 0; i < numFrames; i++) envelope[i] /= peak;
+
+    // Smooth with a small 3-tap average to reduce impulse spikes
+    for (let i = 1; i < numFrames - 1; i++) {
+      envelope[i] = (envelope[i - 1] + envelope[i] + envelope[i + 1]) / 3;
+    }
+
+    return envelope;
+  }
   
   /**
    * Cleanup resources

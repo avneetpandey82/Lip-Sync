@@ -90,6 +90,7 @@ export default function HomePage() {
     isSupported,
     currentViseme,
     nextViseme,
+    mouthAmplitude,
     startListening,
     stopListening,
     interrupt,
@@ -127,6 +128,7 @@ export default function HomePage() {
           currentViseme={currentViseme}
           nextViseme={nextViseme}
           isPlaying={isResponding}
+          mouthAmplitude={mouthAmplitude}
         />
 
         {/* Ambient glow frame per status */}

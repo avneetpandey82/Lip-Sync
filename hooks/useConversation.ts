@@ -19,6 +19,7 @@ export interface UseConversationReturn {
   isSupported: boolean;
   currentViseme: string;
   nextViseme: string;
+  mouthAmplitude: number;
   startListening: () => void;
   stopListening: () => void;
   interrupt: () => void;
@@ -53,7 +54,7 @@ export function useConversation(): UseConversationReturn {
   const recognitionRef = useRef<any>(null);
 
   const {
-    currentViseme, nextViseme,
+    currentViseme, nextViseme, mouthAmplitude,
     isPlaying, isFetching,
     speak,
     stop: stopSpeaking,
@@ -257,6 +258,7 @@ export function useConversation(): UseConversationReturn {
     isSupported,
     currentViseme,
     nextViseme,
+    mouthAmplitude,
     startListening,
     stopListening,
     interrupt,

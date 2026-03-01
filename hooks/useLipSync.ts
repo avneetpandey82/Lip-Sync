@@ -23,20 +23,26 @@ export interface PhonemeData {
  * 4. Synchronize viseme updates with audio playback
  */
 export function useLipSync() {
-  const [currentViseme, setCurrentViseme] = useState<string>('X');
-  const [nextViseme,    setNextViseme]    = useState<string>('X');
-  const [isPlaying,     setIsPlaying]     = useState(false);
-  // isFetching: true while TTS + phoneme data is being prepared (before audio starts)
-  const [isFetching,    setIsFetching]    = useState(false);
-  const [error,         setError]         = useState<string | null>(null);
-  const [progress,      setProgress]      = useState<string>('');
-  // Reactive hasAudio so the Replay button renders as soon as audio is ready
-  const [hasAudio,      setHasAudio]      = useState(false);
+  const [currentViseme,  setCurrentViseme]  = useState<string>('X');
+  const [nextViseme,     setNextViseme]      = useState<string>('X');
+  // mouthAmplitude: instantaneous [0–1] RMS energy from the PCM waveform.
+  // Used by Avatar to modulate how wide the jaw opens — perfectly synced
+  // with actual audio rather than relying on text-estimated timing alone.
+  const [mouthAmplitude, setMouthAmplitude]  = useState<number>(0);
+  const [isPlaying,      setIsPlaying]       = useState(false);
+  const [isFetching,     setIsFetching]      = useState(false);
+  const [error,          setError]           = useState<string | null>(null);
+  const [progress,       setProgress]        = useState<string>('');
+  const [hasAudio,       setHasAudio]        = useState(false);
 
-  const audioManagerRef = useRef<AudioManager | null>(null);
-  const phonemeDataRef  = useRef<MouthCue[]>([]);
+  const audioManagerRef   = useRef<AudioManager | null>(null);
+  const phonemeDataRef    = useRef<MouthCue[]>([]);
   const animationFrameRef = useRef<number | undefined>(undefined);
-  const audioBufferRef  = useRef<ArrayBuffer | null>(null);
+  const audioBufferRef    = useRef<ArrayBuffer | null>(null);
+  // RMS amplitude envelope extracted from PCM (fps = 100 → 10 ms windows)
+  const AMPLITUDE_FPS           = 100;
+  const amplitudeEnvelopeRef    = useRef<Float32Array | null>(null);
+  const mouthAmplitudeRef       = useRef<number>(0);
 
   // Refs that mirror state — read inside the rAF callback to avoid stale closures.
   const isPlayingRef     = useRef(false);
@@ -75,14 +81,31 @@ export function useLipSync() {
     
     const currentTime = audioManagerRef.current.getCurrentTime();
     
-    // Find the mouth cue that matches current time
+    // ── Amplitude: read RMS from envelope at current playback time ──────────
+    // This gives us the actual speech energy so the Avatar can open its jaw
+    // proportionally to the loudness of each phoneme — much more lifelike
+    // than a flat text-estimated weight.
+    if (amplitudeEnvelopeRef.current) {
+      const frameIdx = Math.min(
+        Math.floor(currentTime * AMPLITUDE_FPS),
+        amplitudeEnvelopeRef.current.length - 1,
+      );
+      const rawAmp = amplitudeEnvelopeRef.current[frameIdx] ?? 0;
+      // Gamma-correct to make small values more visible (~0.6 power curve)
+      const amp = Math.pow(rawAmp, 0.6);
+      if (Math.abs(amp - mouthAmplitudeRef.current) > 0.01) {
+        mouthAmplitudeRef.current = amp;
+        setMouthAmplitude(amp);
+      }
+    }
+
+    // ── Viseme: find phoneme cue matching current time ───────────────────────
     const currentCue = phonemeDataRef.current.find(
       cue => currentTime >= cue.start && currentTime < cue.end
     );
     
     if (currentCue) {
       if (currentCue.value !== currentVisemeRef.current) {
-        console.log(`[Lip Sync] Time: ${currentTime.toFixed(3)}s -> Viseme: ${currentCue.value} (${currentCue.start.toFixed(3)}s - ${currentCue.end.toFixed(3)}s)`);
         currentVisemeRef.current = currentCue.value;
         setCurrentViseme(currentCue.value);
       }
@@ -93,8 +116,7 @@ export function useLipSync() {
       }
     }
 
-    // Look-ahead: find the next cue starting within 50 ms
-    // Smaller window avoids anticipating visemes too early at natural speech rate.
+    // Look-ahead: next cue within 50 ms
     const LOOK_AHEAD_S = 0.05;
     const nextCue = phonemeDataRef.current.find(
       (cue) => cue.start > currentTime && cue.start <= currentTime + LOOK_AHEAD_S
@@ -201,6 +223,11 @@ export function useLipSync() {
       const fullAudioBuffer = AudioManager.concatenateChunks(chunks);
       audioBufferRef.current = fullAudioBuffer;
       setHasAudio(true);
+
+      // Extract amplitude envelope immediately — used in rAF loop to modulate jaw
+      amplitudeEnvelopeRef.current = AudioManager.extractAmplitudeEnvelope(
+        fullAudioBuffer, AMPLITUDE_FPS,
+      );
       
       // Step 3: Correct phoneme timing with the ACTUAL audio duration.
       // Re-fetch only if the rough estimate was off by more than 10%.
@@ -318,6 +345,8 @@ export function useLipSync() {
     setIsFetching(false);
     setIsPlaying(false);
     setCurrentViseme('X');
+    setMouthAmplitude(0);
+    mouthAmplitudeRef.current = 0;
     setProgress('');
   };
   
@@ -351,6 +380,7 @@ export function useLipSync() {
   return {
     currentViseme,
     nextViseme,
+    mouthAmplitude,
     isPlaying,
     isFetching,
     error,
