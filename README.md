@@ -54,7 +54,7 @@ Mic â†’ Web Speech API (interim + final transcript)
 - **Node.js 18+**
 - **OpenAI API key** with access to `gpt-4o-mini` and `gpt-4o-mini-tts`
 - **Chrome or Edge** browser (Web Speech API for microphone input)
-- *(Optional)* Rhubarb Lip Sync binary for higher-accuracy phoneme refinement
+- _(Optional)_ Rhubarb Lip Sync binary for higher-accuracy phoneme refinement
 
 ## € Quick Start
 
@@ -79,11 +79,13 @@ Get your key from: https://platform.openai.com/api-keys
 Without Rhubarb the system uses the built-in CMU phoneme estimator â€” accuracy is good for most use cases. With Rhubarb it is excellent.
 
 **Windows:**
+
 1. Download latest release from https://github.com/DanielSWolf/rhubarb-lip-sync/releases
 2. Extract `rhubarb.exe`
 3. Place it at `lib/rhubarb/rhubarb.exe`
 
 **Linux / macOS:**
+
 1. Download the appropriate release
 2. Place binary at `lib/rhubarb/rhubarb`
 3. `chmod +x lib/rhubarb/rhubarb`
@@ -163,17 +165,17 @@ OPENAI_API_KEY=sk-...
 
 ### OpenAI models
 
-| Usage | Model | File |
-|---|---|---|
-| Chat replies | `gpt-4o-mini` | `app/api/chat/route.ts` |
+| Usage          | Model             | File                          |
+| -------------- | ----------------- | ----------------------------- |
+| Chat replies   | `gpt-4o-mini`     | `app/api/chat/route.ts`       |
 | Text-to-speech | `gpt-4o-mini-tts` | `app/api/tts/stream/route.ts` |
 
 ### TTS voice
 
-Default voice is `coral`. Change it in `hooks/useConversation.ts`:
+()Default voice is `coral`. Change it in `hooks/useConversation.ts`:
 
 ```typescript
-await speak(reply, 'coral', 1.0);
+await speak(reply, "coral", 1.0);
 ```
 
 Available voices: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`, `coral`, `sage`
@@ -197,17 +199,17 @@ Edit the system prompt in `app/api/chat/route.ts`:
 
 ### Viseme map (Rhubarb alphabet)
 
-| Letter | Phonemes | `mouthOpen` | `mouthSmile` |
-|--------|----------|-------------|--------------|
-| X | silence / rest | 0.00 | 0.00 |
-| A | "ah" â€” most open | 1.00 | 0.05 |
-| B | m / b / p â€” lips closed | 0.00 | 0.00 |
-| C | "oh" â€” round open | 0.65 | 0.00 |
-| D | th / d / n | 0.35 | 0.12 |
-| E | "oo" â€” tight round | 0.20 | 0.00 |
-| F | f / v | 0.15 | 0.05 |
-| G | k / g â€” velar | 0.45 | 0.00 |
-| H | s / z / sh / "ee" | 0.22 | 0.48 |
+| Letter | Phonemes                  | `mouthOpen` | `mouthSmile` |
+| ------ | ------------------------- | ----------- | ------------ |
+| X      | silence / rest            | 0.00        | 0.00         |
+| A      | "ah" â€” most open        | 1.00        | 0.05         |
+| B      | m / b / p â€” lips closed | 0.00        | 0.00         |
+| C      | "oh" â€” round open       | 0.65        | 0.00         |
+| D      | th / d / n                | 0.35        | 0.12         |
+| E      | "oo" â€” tight round      | 0.20        | 0.00         |
+| F      | f / v                     | 0.15        | 0.05         |
+| G      | k / g â€” velar           | 0.45        | 0.00         |
+| H      | s / z / sh / "ee"         | 0.22        | 0.48         |
 
 ### Amplitude modulation
 
@@ -225,23 +227,23 @@ gated_open = viseme_weight Ã— smooth_ramp(amplitude)
 
 Vowel duration multipliers from ARPAbet stress markers:
 
-| Stress | Multiplier | Example |
-|--------|-----------|---------|
-| Primary (1) | 1.45Ã— | **Ëˆsp**eaking |
-| Secondary (2) | 1.15Ã— | underËŒstand |
-| Unstressed (0) | 0.65Ã— | schwa /É™/ |
-| Consonant | 1.00Ã— | â€” |
+| Stress         | Multiplier | Example        |
+| -------------- | ---------- | -------------- |
+| Primary (1)    | 1.45Ã—     | **Ëˆsp**eaking |
+| Secondary (2)  | 1.15Ã—     | underËŒstand   |
+| Unstressed (0) | 0.65Ã—     | schwa /É™/     |
+| Consonant      | 1.00Ã—     | â€”            |
 
 ---
 
 ## –¥ï¸ UI Behaviour
 
-| Status | Mic button | Glow colour |
-|--------|-----------|-------------|
-| `idle` | Press to speak | â€” |
-| `listening` | Pulse ring Â· tap to stop | Emerald green |
-| `thinking` | Disabled (dots) | Amber |
-| `responding` | Tap to interrupt | Indigo |
+| Status       | Mic button                | Glow colour   |
+| ------------ | ------------------------- | ------------- |
+| `idle`       | Press to speak            | â€”           |
+| `listening`  | Pulse ring Â· tap to stop | Emerald green |
+| `thinking`   | Disabled (dots)           | Amber         |
+| `responding` | Tap to interrupt          | Indigo        |
 
 - Live interim transcript appears as the user speaks (italic bubble)
 - Assistant text bubble appears **exactly when audio starts** (no gap)
@@ -267,28 +269,28 @@ vercel --prod
 
 ## › Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| "OpenAI API key not configured" | Check `.env.local` and restart dev server |
-| Mic button does nothing | Use Chrome or Edge; grant microphone permission |
-| Avatar not loading | Add `public/avatar.glb` (Ready Player Me export with Morph Targets) |
-| Mouth stays closed | Open browser DevTools â†’ verify `mouthOpen`/`mouthSmile` morph targets are present in your GLB |
-| Rhubarb not running | Check binary path `lib/rhubarb/rhubarb(.exe)` and execute permission |
-| No audio | HTTPS required in production; click mic to initialise AudioContext |
+| Symptom                         | Fix                                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| "OpenAI API key not configured" | Check `.env.local` and restart dev server                                                       |
+| Mic button does nothing         | Use Chrome or Edge; grant microphone permission                                                 |
+| Avatar not loading              | Add `public/avatar.glb` (Ready Player Me export with Morph Targets)                             |
+| Mouth stays closed              | Open browser DevTools â†’ verify `mouthOpen`/`mouthSmile` morph targets are present in your GLB |
+| Rhubarb not running             | Check binary path `lib/rhubarb/rhubarb(.exe)` and execute permission                            |
+| No audio                        | HTTPS required in production; click mic to initialise AudioContext                              |
 
 ---
 
 ## “š Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 16, React 19 |
-| 3D rendering | Three.js 0.170, React Three Fiber 9, Drei 10 |
-| AI / Speech | OpenAI `gpt-4o-mini`, `gpt-4o-mini-tts`, Web Speech API |
-| Lip-sync | Rhubarb Lip Sync (optional binary) + CMU G2P estimator |
-| Audio | Web Audio API (PCM playback + RMS envelope) |
-| Styling | Tailwind CSS 4 |
-| Deployment | Vercel |
+| Layer        | Technology                                              |
+| ------------ | ------------------------------------------------------- |
+| Framework    | Next.js 16, React 19                                    |
+| 3D rendering | Three.js 0.170, React Three Fiber 9, Drei 10            |
+| AI / Speech  | OpenAI `gpt-4o-mini`, `gpt-4o-mini-tts`, Web Speech API |
+| Lip-sync     | Rhubarb Lip Sync (optional binary) + CMU G2P estimator  |
+| Audio        | Web Audio API (PCM playback + RMS envelope)             |
+| Styling      | Tailwind CSS 4                                          |
+| Deployment   | Vercel                                                  |
 
 ---
 
@@ -303,4 +305,3 @@ MIT â€” free to use in personal and commercial projects.
 - [React Three Fiber](https://github.com/pmndrs/react-three-fiber) and [Drei](https://github.com/pmndrs/drei) communities
 - [Ready Player Me](https://readyplayer.me) for the avatar format
 - [CMU Pronouncing Dictionary](http://www.speech.cs.cmu.edu/cgi-bin/cmudict) for phoneme data
-
