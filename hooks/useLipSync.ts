@@ -138,16 +138,22 @@ export function useLipSync() {
   
   /**
    * Main speak function - orchestrates the entire pipeline
+   * @param onReady - Optional callback fired right before audio playback starts.
+   *                  Use this to sync UI updates (e.g. showing a message bubble)
+   *                  with the moment audio begins, eliminating perceived latency.
    */
-  const speak = async (text: string, voice: string = 'coral', speed: number = 1.0) => {
+  const speak = async (
+    text:     string,
+    voice:    string = 'coral',
+    speed:    number = 1.0,
+    onReady?: () => void,
+  ) => {
     if (!audioManagerRef.current) {
       setError('Audio manager not initialized');
       return;
     }
     
     setError(null);
-    // isFetching = true blocks the UI (disables textarea/button) while we prepare audio,
-    // but does NOT start the rAF viseme loop — that only starts when isPlaying = true.
     setIsFetching(true);
     setProgress('Requesting speech...');
     
@@ -155,56 +161,69 @@ export function useLipSync() {
       // Initialize audio context (requires user interaction)
       await audioManagerRef.current.init();
       
-      // Step 1: Request TTS audio stream
+      // Step 1: Start TTS stream AND pre-fetch phonemes with a rough duration
+      // estimate — both requests fly in parallel so we don't wait for audio
+      // to finish before starting the phoneme request.
       setProgress('Streaming audio from OpenAI...');
-      const ttsResponse = await fetch('/api/tts/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice, speed })
-      });
+
+      // Rough estimate: average English speech is ~130 words/min = ~2.17 words/sec
+      const wordCount     = text.trim().split(/\s+/).length;
+      const roughDuration = Math.max(1, wordCount / 2.17);
+
+      // Fire TTS and phoneme requests concurrently
+      const [ttsResponse] = await Promise.all([
+        fetch('/api/tts/stream', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ text, voice, speed }),
+        }),
+        // Prime phonemes with rough duration — will be corrected after download
+        getEstimatedPhonemes(text, roughDuration),
+      ]);
       
       if (!ttsResponse.ok) {
         const errorData = await ttsResponse.json();
         throw new Error(errorData.error || 'TTS request failed');
       }
       
-      // Step 2: Collect all audio chunks first
-      setProgress('Collecting audio...');
+      // Step 2: Stream audio into memory
+      setProgress('Buffering audio...');
       const reader = ttsResponse.body?.getReader();
       if (!reader) throw new Error('No response body');
       
       const chunks: Uint8Array[] = [];
-      
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         chunks.push(value);
       }
       
-      // Concatenate all chunks
       const fullAudioBuffer = AudioManager.concatenateChunks(chunks);
       audioBufferRef.current = fullAudioBuffer;
       setHasAudio(true);
       
-      // Step 3: Get phoneme estimate using the ACTUAL audio duration.
-      // Only one estimate call — with the real duration so timing is accurate.
+      // Step 3: Correct phoneme timing with the ACTUAL audio duration.
+      // Re-fetch only if the rough estimate was off by more than 10%.
       const actualDuration = AudioManager.estimateDuration(fullAudioBuffer);
-      await getEstimatedPhonemes(text, actualDuration);
+      const durationError  = Math.abs(actualDuration - roughDuration) / actualDuration;
+      if (durationError > 0.10) {
+        await getEstimatedPhonemes(text, actualDuration);
+      }
       
-      // Step 4: Transition from fetching → playing.
-      // isPlaying = true kicks off the rAF viseme loop, which is now perfectly
-      // aligned because audio starts immediately below.
+      // Step 4: Fire onReady BEFORE starting playback so any caller-side UI
+      // update (e.g. showing the message bubble) is synchronised with audio.
+      onReady?.();
+
       setIsFetching(false);
       setIsPlaying(true);
       setProgress('Playing...');
       
-      // Start playback — onEnded fires when audio source actually finishes.
       await audioManagerRef.current.playPCM(fullAudioBuffer, () => {
         setIsPlaying(false);
         setProgress('');
       });
       
-      // Step 5: Background refinement with Rhubarb (non-blocking, updates mid-play if fast)
+      // Step 5: Background Rhubarb refinement (non-blocking)
       refinePhonemes(fullAudioBuffer, text);
       
     } catch (err) {

@@ -1,8 +1,8 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import { useLipSync } from "@/hooks/useLipSync";
+import { useConversation } from "@/hooks/useConversation";
 
 const AvatarScene = dynamic(
   () => import("@/components/AvatarScene").then((mod) => mod.AvatarScene),
@@ -18,106 +18,253 @@ const AvatarScene = dynamic(
   },
 );
 
+/* ─── Status helpers ─────────────────────────────────────────────────── */
+const STATUS_LABEL: Record<string, string> = {
+  idle:       "Press mic to speak",
+  listening:  "Listening...",
+  thinking:   "Thinking...",
+  responding: "Speaking...",
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  idle:       "text-gray-500",
+  listening:  "text-emerald-400",
+  thinking:   "text-amber-400",
+  responding: "text-indigo-400",
+};
+
+/* ─── Mic icon SVG ────────────────────────────────────────────────────── */
+function MicIcon({ muted }: { muted?: boolean }) {
+  return muted ? (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+         strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
+      <line x1="2" y1="2" x2="22" y2="22" />
+      <path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2" />
+      <path d="M5 10v2a7 7 0 0 0 12 4.93" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="8"  y1="22" x2="16" y2="22" />
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V6a3 3 0 0 0-5.94-.6" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+         strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="8"  y1="22" x2="16" y2="22" />
+    </svg>
+  );
+}
+
+/* ─── Stop icon ───────────────────────────────────────────────────────── */
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+    </svg>
+  );
+}
+
+/* ─── Thinking dots ───────────────────────────────────────────────────── */
+function ThinkingDots() {
+  return (
+    <span className="flex items-center gap-1.5">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="w-2 h-2 rounded-full bg-amber-400"
+          style={{ animation: `tBounce 1s ease-in-out ${i * 0.2}s infinite` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/* ─── Page ────────────────────────────────────────────────────────────── */
 export default function HomePage() {
-  const [text, setText] = useState("");
+  const {
+    messages,
+    status,
+    interimTranscript,
+    error,
+    isSupported,
+    currentViseme,
+    nextViseme,
+    startListening,
+    stopListening,
+    interrupt,
+    clearHistory,
+  } = useConversation();
 
-  const { currentViseme, nextViseme, isPlaying, isFetching, error, speak, stop, hasAudio, replay } =
-    useLipSync();
+  // Auto-scroll chat to latest message
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, interimTranscript]);
 
-  // busy = either loading audio OR actually playing — blocks new requests
-  const busy = isFetching || isPlaying;
+  const isListening  = status === "listening";
+  const isThinking   = status === "thinking";
+  const isResponding = status === "responding";
+  const isIdle       = status === "idle";
 
-  const handleSpeak = async () => {
-    if (!text.trim() || busy) return;
-    await speak(text.trim(), "coral", 1.0);
+  /* Mic button action */
+  const handleMicClick = () => {
+    if (isResponding)   { interrupt(); return; }
+    if (isListening)    { stopListening(); return; }
+    if (isThinking)     return; // can't interrupt thinking
+    startListening();
   };
 
-  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSpeak();
-    }
-  };
+  // Show only the last 6 messages to keep UI clean
+  const visibleMessages = messages.slice(-6);
 
   return (
-    <main className="h-screen w-screen bg-[#0a0e1a] flex flex-col overflow-hidden">
+    <main className="h-screen w-screen bg-[#0a0e1a] flex flex-col overflow-hidden relative">
 
-      {/* Avatar fills all space above the input bar */}
-      <div className="flex-1 min-h-0 relative">
+      {/* ── Avatar fills the whole screen ─────────────────────────────── */}
+      <div className="absolute inset-0">
         <AvatarScene
           currentViseme={currentViseme}
           nextViseme={nextViseme}
-          isPlaying={isPlaying}
+          isPlaying={isResponding}
         />
 
-        {(isPlaying || isFetching) && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              boxShadow: isFetching
-                ? "inset 0 0 60px 10px rgba(148,163,184,0.15)"
-                : "inset 0 0 60px 10px rgba(99,102,241,0.25)",
-              animation: "lspulse 1.2s ease-in-out infinite",
-            }}
-          />
+        {/* Ambient glow frame per status */}
+        {isListening && (
+          <div aria-hidden className="pointer-events-none absolute inset-0"
+               style={{ boxShadow: "inset 0 0 80px 12px rgba(52,211,153,0.18)",
+                        animation: "lspulse 1s ease-in-out infinite" }} />
         )}
-
-        {error && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-red-900/80 border border-red-600 text-red-200 text-sm px-5 py-2 rounded-full backdrop-blur-sm whitespace-nowrap">
-            {error}
-          </div>
+        {isResponding && (
+          <div aria-hidden className="pointer-events-none absolute inset-0"
+               style={{ boxShadow: "inset 0 0 80px 12px rgba(99,102,241,0.28)",
+                        animation: "lspulse 1.2s ease-in-out infinite" }} />
+        )}
+        {isThinking && (
+          <div aria-hidden className="pointer-events-none absolute inset-0"
+               style={{ boxShadow: "inset 0 0 80px 12px rgba(251,191,36,0.12)",
+                        animation: "lspulse 0.8s ease-in-out infinite" }} />
         )}
       </div>
 
-      {/* Input bar */}
-      <div className="flex-none bg-[#0d1220]/90 border-t border-white/5 backdrop-blur-sm px-4 py-4">
-        <div className="max-w-3xl mx-auto flex items-end gap-3">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKey}
-            disabled={busy}
-            rows={2}
-            placeholder="Type something and press Speak... (Enter to send)"
-            className="flex-1 resize-none bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          />
+      {/* ── Bottom panel (glassmorphism) ──────────────────────────────── */}
+      <div className="absolute bottom-0 inset-x-0 flex flex-col items-center pb-6 pt-2"
+           style={{ background: "linear-gradient(to top, #0a0e1aee 60%, transparent)" }}>
 
-          {hasAudio && !busy && (
-            <button
-              onClick={replay}
-              title="Replay"
-              className="flex-none w-11 h-11 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors text-lg"
-            >
-              &#8617;
-            </button>
+        {/* Chat messages */}
+        <div className="w-full max-w-2xl px-4 mb-3 flex flex-col gap-2 max-h-52 overflow-y-auto scrollbar-hide">
+          {visibleMessages.map((msg) => (
+            <div key={msg.id}
+                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`
+                max-w-[82%] px-4 py-2 rounded-2xl text-sm leading-snug
+                ${msg.role === "user"
+                  ? "bg-indigo-600/80 text-white rounded-br-sm"
+                  : "bg-white/10 text-gray-100 rounded-bl-sm backdrop-blur-sm border border-white/5"}
+              `}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+
+          {/* Live interim transcript */}
+          {interimTranscript && (
+            <div className="flex justify-end">
+              <div className="max-w-[82%] px-4 py-2 rounded-2xl rounded-br-sm text-sm
+                              leading-snug bg-indigo-600/40 text-indigo-200 italic
+                              border border-indigo-500/30">
+                {interimTranscript}
+                <span className="ml-1 inline-block w-0.5 h-3.5 bg-indigo-300 animate-blink align-middle" />
+              </div>
+            </div>
           )}
 
-          {busy && (
-            <button
-              onClick={stop}
-              title="Stop"
-              className="flex-none w-11 h-11 rounded-xl bg-red-600/80 hover:bg-red-500 flex items-center justify-center text-white transition-colors text-xl leading-none"
-            >
-              &#9632;
-            </button>
+          {/* Thinking indicator */}
+          {isThinking && (
+            <div className="flex justify-start">
+              <div className="px-4 py-3 rounded-2xl rounded-bl-sm bg-white/10 backdrop-blur-sm border border-white/5">
+                <ThinkingDots />
+              </div>
+            </div>
           )}
 
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Status label */}
+        <p className={`text-xs mb-3 tracking-widest uppercase font-medium ${STATUS_COLOR[status]}`}>
+          {STATUS_LABEL[status]}
+        </p>
+
+        {/* Mic / interrupt button row */}
+        <div className="flex items-center gap-6">
+
+          {/* Clear history (only when idle + messages exist) */}
+          {messages.length > 0 && isIdle ? (
+            <button onClick={clearHistory} title="Clear conversation"
+                    className="w-10 h-10 rounded-full bg-white/5 border border-white/10
+                               text-gray-500 hover:text-gray-300 hover:bg-white/10
+                               flex items-center justify-center transition-all text-sm">
+              ✕
+            </button>
+          ) : (
+            <div className="w-10" />
+          )}
+
+          {/* Main mic / stop button */}
           <button
-            onClick={handleSpeak}
-            disabled={busy || !text.trim()}
-            className="flex-none px-6 h-11 rounded-xl font-semibold text-sm bg-indigo-600 hover:bg-indigo-500 text-white disabled:bg-white/5 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors shadow-lg shadow-indigo-900/30"
+            onClick={handleMicClick}
+            disabled={isThinking}
+            aria-label={isListening ? "Stop listening" : isResponding ? "Interrupt" : "Start speaking"}
+            className={`
+              relative rounded-full flex items-center justify-center
+              transition-all duration-200 shadow-2xl
+              disabled:opacity-40 disabled:cursor-not-allowed
+              ${isListening
+                ? "bg-emerald-500 text-white scale-110 shadow-emerald-800/60"
+                : isResponding
+                ? "bg-red-600/90 text-white hover:bg-red-500"
+                : "bg-white/10 text-white hover:bg-white/20 border border-white/15"}
+            `}
+            style={{ width: 72, height: 72 }}
           >
-            {isFetching ? "Loading..." : isPlaying ? "Speaking..." : "Speak"}
+            {/* Listening pulse rings */}
+            {isListening && (
+              <>
+                <span className="absolute inset-0 rounded-full bg-emerald-500 opacity-40 animate-ping" />
+                <span className="absolute inset-0 rounded-full bg-emerald-400 opacity-20"
+                      style={{ animation: "ping 1.5s cubic-bezier(0,0,0.2,1) infinite 0.5s" }} />
+              </>
+            )}
+            {isResponding ? <StopIcon /> : <MicIcon muted={isThinking} />}
           </button>
+
+          {/* Spacer mirror */}
+          <div className="w-10" />
         </div>
 
-        <div className="max-w-3xl mx-auto mt-2 flex items-center gap-2">
-          <span className="text-[10px] text-gray-700 uppercase tracking-widest">viseme</span>
-          <span className="font-mono text-xs text-indigo-400 font-bold w-4">{currentViseme}</span>
-          <span className="text-[10px] text-gray-800">&#8594;</span>
-          <span className="font-mono text-xs text-purple-700 w-4">{nextViseme}</span>
-        </div>
+        {/* Error */}
+        {error && (
+          <div className="mt-3 bg-red-900/80 border border-red-600 text-red-200 text-xs
+                          px-5 py-2 rounded-full backdrop-blur-sm max-w-sm text-center">
+            {error}
+          </div>
+        )}
+
+        {/* Browser support warning */}
+        {!isSupported && (
+          <p className="mt-3 text-yellow-500/80 text-xs text-center max-w-xs">
+            Speech recognition not supported. Use Chrome or Edge for real-time conversation.
+          </p>
+        )}
+      </div>
+
+      {/* Debug viseme strip — top-right, subtle */}
+      <div className="absolute top-3 right-4 flex items-center gap-2 pointer-events-none">
+        <span className="text-[10px] text-gray-700 uppercase tracking-widest">viseme</span>
+        <span className="font-mono text-xs text-indigo-400 font-bold w-4">{currentViseme}</span>
+        <span className="text-[10px] text-gray-800">→</span>
+        <span className="font-mono text-xs text-purple-700 w-4">{nextViseme}</span>
       </div>
 
       <style>{`
@@ -125,7 +272,19 @@ export default function HomePage() {
           0%, 100% { opacity: 0.6; }
           50%       { opacity: 1;   }
         }
+        @keyframes tBounce {
+          0%, 80%, 100% { transform: translateY(0);    }
+          40%           { transform: translateY(-6px); }
+        }
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50%      { opacity: 0; }
+        }
+        .animate-blink { animation: blink 0.8s ease-in-out infinite; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </main>
   );
 }
+
