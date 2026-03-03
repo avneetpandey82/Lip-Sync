@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useConversation } from "@/hooks/useConversation";
 
@@ -82,6 +82,8 @@ function ThinkingDots() {
 
 /* ─── Page ────────────────────────────────────────────────────────────── */
 export default function HomePage() {
+  const [botName, setBotName] = useState('Avneet');
+
   const {
     messages,
     status,
@@ -95,7 +97,7 @@ export default function HomePage() {
     stopListening,
     interrupt,
     clearHistory,
-  } = useConversation();
+  } = useConversation(botName);
 
   // Auto-scroll chat to latest message
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -121,6 +123,39 @@ export default function HomePage() {
 
   return (
     <main className="h-screen w-screen bg-[#0a0e1a] flex flex-col overflow-hidden relative">
+
+      {/* ── Top bar: product name + bot name field ───────────────────── */}
+      <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between px-6 py-3"
+           style={{ background: "linear-gradient(to bottom, #0a0e1af5 55%, transparent)" }}>
+
+        {/* Product name + active companion name */}
+        <div className="flex flex-col leading-tight">
+          <span className="text-[9px] uppercase tracking-[0.28em] font-semibold"
+                style={{ color: "#6366f1" }}>Meet your companion</span>
+          <span className="text-white font-semibold text-sm mt-0.5">{botName || 'Avneet'}</span>
+        </div>
+
+        {/* Inline name editor */}
+        <div className="flex items-center gap-2.5">
+          <label htmlFor="bot-name"
+                 className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-medium whitespace-nowrap">
+            Companion name
+          </label>
+          <input
+            id="bot-name"
+            type="text"
+            value={botName}
+            onChange={(e) => setBotName(e.target.value)}
+            onBlur={(e) => { if (!e.target.value.trim()) setBotName('Avneet'); }}
+            maxLength={24}
+            placeholder="Avneet"
+            className="bg-white/5 border border-white/10 text-white text-sm rounded-lg
+                       px-3 py-1.5 w-36 placeholder-gray-600
+                       focus:outline-none focus:border-indigo-500/60 focus:bg-white/[0.07]
+                       transition-colors"
+          />
+        </div>
+      </div>
 
       {/* ── Avatar fills the whole screen ─────────────────────────────── */}
       <div className="absolute inset-0">

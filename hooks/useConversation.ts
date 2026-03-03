@@ -37,7 +37,7 @@ export interface UseConversationReturn {
  * Status machine:
  *   idle → listening → thinking → responding → idle
  */
-export function useConversation(): UseConversationReturn {
+export function useConversation(botName: string = 'Avneet'): UseConversationReturn {
   const [messages, setMessages]             = useState<Message[]>([]);
   const [status, setStatus]                 = useState<ConversationStatus>('idle');
   const [interimTranscript, setInterim]     = useState('');
@@ -169,7 +169,7 @@ export function useConversation(): UseConversationReturn {
       const res = await fetch('/api/chat', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ message: text, conversationHistory: history }),
+        body:    JSON.stringify({ message: text, conversationHistory: history, botName }),
       });
 
       if (!res.ok) {
@@ -187,7 +187,7 @@ export function useConversation(): UseConversationReturn {
       setStatus('responding');
       statusRef.current = 'responding';
 
-      await speak(reply, 'coral', 1.0, () => {
+      await speak(reply, 'coral', 0.85, () => {
         // onReady: fires right before first audio frame — add bubble now
         const finalMsgs = [...messagesRef.current, assistantMsg];
         messagesRef.current = finalMsgs;

@@ -9,7 +9,7 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { message, conversationHistory = [] } = await req.json();
+    const { message, conversationHistory = [], botName = 'Avneet' } = await req.json();
     
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     const messages: any[] = [
       {
         role: 'system',
-        content: 'You are a friendly AI avatar assistant. Keep responses conversational, concise (2-3 sentences), and natural. Be helpful and engaging.'
+        content: `You are a warm, engaging AI companion named ${botName}. Keep responses conversational, concise (2-3 sentences), and natural. Refer to yourself as ${botName} when introducing yourself. Be helpful and engaging.`
       },
       ...conversationHistory,
       {

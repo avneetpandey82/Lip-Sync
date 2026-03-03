@@ -116,8 +116,8 @@ export function useLipSync() {
       }
     }
 
-    // Look-ahead: next cue within 50 ms
-    const LOOK_AHEAD_S = 0.05;
+    // Look-ahead: next cue within 40 ms (tighter window = less early blending)
+    const LOOK_AHEAD_S = 0.04;
     const nextCue = phonemeDataRef.current.find(
       (cue) => cue.start > currentTime && cue.start <= currentTime + LOOK_AHEAD_S
     );

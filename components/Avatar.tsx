@@ -20,13 +20,14 @@ interface VisemeTarget {
   weight: number;
 }
 
-// Look-ahead blend weight — 20 % of the NEXT phoneme bleeds into the
+// Look-ahead blend weight — 10 % of the NEXT phoneme bleeds into the
 // current frame so transitions feel organic rather than step-function sharp.
-const LOOK_AHEAD_WEIGHT = 0.20;
+// Keeping this low ensures the current shape is FULLY visible before blending.
+const LOOK_AHEAD_WEIGHT = 0.10;
 
 // Silence gate: amplitude below this level → mouth closes regardless of phoneme.
-// Prevents the jaw hanging open during inter-word or inter-sentence pauses.
-const SILENCE_THRESHOLD = 0.07;
+// Lowered from 0.07 → 0.04 so soft phonemes aren't incorrectly gated out.
+const SILENCE_THRESHOLD = 0.04;
 // Floor for consonants (B/F/G/D) — these have near-zero mouthOpen already,
 // but a small floor stops their shape fully disappearing on soft consonants.
 const CONSONANT_AMP_FLOOR = 0.10;
@@ -204,9 +205,9 @@ export function Avatar({ currentViseme, nextViseme, isPlaying, mouthAmplitude }:
         const current = mesh.morphTargetInfluences![idx] ?? 0;
         const target  = weights[name] ?? 0;
         // Attack 120/s → 99% in ~2 frames at 60 fps (instant-feeling onset).
-        // Decay   22/s → gradual close so silence gaps read as natural pauses
-        //                rather than a snapping-shut mouth.
-        const rate = target > current ? 120 : 22;
+        // Decay   38/s → jaw closes in ~75ms so phoneme boundaries are visible
+        //                as distinct shapes rather than a continuous blur.
+        const rate = target > current ? 120 : 38;
 
         mesh.morphTargetInfluences![idx] = THREE.MathUtils.lerp(
           current,
