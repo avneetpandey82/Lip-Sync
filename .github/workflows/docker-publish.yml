@@ -3,10 +3,10 @@ name: Docker Build & Push
 on:
   push:
     branches:
-      - "**"          # trigger on every branch push
+      - "**" # trigger on every branch push
   pull_request:
     branches:
-      - main          # build (but don't push) on PRs targeting main
+      - main # build (but don't push) on PRs targeting main
 
 jobs:
   build-and-push:
@@ -37,7 +37,7 @@ jobs:
 
       # ── 5. Log in to Docker Hub ────────────────────────────────────────────────
       - name: Log in to Docker Hub
-        # Skip login on pull_request events (forks don't have secrets access)
+        # Skip login on pull_request eventss (forks don't have secrets access)
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
