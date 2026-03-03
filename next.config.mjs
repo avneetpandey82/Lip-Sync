@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Produce a standalone server bundle for optimized Docker deployments
+  output: "standalone",
   webpack: (config, { isServer }) => {
     // Handle audio files
     config.module.rules.push({

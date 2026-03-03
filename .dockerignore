@@ -1,0 +1,41 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies (installed fresh in each Docker stage)
+node_modules
+
+# Next.js build output (created inside the container)
+.next
+out
+
+# Environment files — never bake secrets into the image
+.env
+.env.*
+!.env.example
+
+# Development / editor files
+.vscode
+.idea
+*.log
+npm-debug.log*
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Docker files themselves
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Docs / optional files
+README.md
+CHECKLIST.md
+NEXT_STEPS.md
+QUICKSTART.md
+RHUBARB_SETUP.md
+
+# Test / CI artifacts
+coverage
+.nyc_output

@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  lip-sync:
+    # ── Docker Hub image ─────────────────────────────────────────────────────────
+    # Used by Azure App Service — replace with your Docker Hub username
+    image: your-dockerhub-username/lip-sync-avatar:latest
+
+    # ── Local build (comment out image above and use this for local dev) ─────────
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   target: runner
+
+    container_name: lip-sync-avatar
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      # ── Injected at runtime ───────────────────────────────────────────────────
+      # Locally:  set in .env file and reference with ${OPENAI_API_KEY}
+      # Azure:    set in App Service → Configuration → Application Settings
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - RHUBARB_AVAILABLE=${RHUBARB_AVAILABLE:-false}
+
+    # Local-only: load from .env file (ignored by Azure App Service)
+    env_file:
+      - .env
