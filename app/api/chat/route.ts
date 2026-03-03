@@ -3,27 +3,28 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(req: Request) {
   try {
     const { message, conversationHistory = [], botName = 'Avneet', language = 'English' } = await req.json();
-    
+
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
         { error: 'Missing or invalid message parameter' },
         { status: 400 }
       );
     }
-    
+
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
         { error: 'OpenAI API key not configured' },
         { status: 500 }
       );
     }
+
+    // Instantiate at runtime so build-time evaluation never fails
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
     
     console.log(`Chat request: "${message.slice(0, 50)}..."`);
     
