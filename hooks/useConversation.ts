@@ -37,7 +37,7 @@ export interface UseConversationReturn {
  * Status machine:
  *   idle → listening → thinking → responding → idle
  */
-export function useConversation(botName: string = 'Avneet'): UseConversationReturn {
+export function useConversation(botName: string = 'Avneet', language: string = 'English'): UseConversationReturn {
   const [messages, setMessages]             = useState<Message[]>([]);
   const [status, setStatus]                 = useState<ConversationStatus>('idle');
   const [interimTranscript, setInterim]     = useState('');
@@ -47,6 +47,20 @@ export function useConversation(botName: string = 'Avneet'): UseConversationRetu
   // Stable ref copies ─ safe to read inside callbacks without stale closures
   const statusRef   = useRef<ConversationStatus>('idle');
   const messagesRef = useRef<Message[]>([]);
+  const languageRef = useRef<string>(language);
+
+  // BCP-47 locale map — used to set recognition.lang before each session
+  const LANG_LOCALE: Record<string, string> = {
+    English:  'en-US',
+    French:   'fr-FR',
+    Spanish:  'es-ES',
+    Hindi:    'hi-IN',
+    Hinglish: 'hi-IN', // Hindi recogniser handles code-switched Hindi+English well
+    Slang:    'en-US',
+  };
+
+  // Keep languageRef in sync whenever the prop changes
+  useEffect(() => { languageRef.current = language; }, [language]);
 
   // Pipeline handle ref so speech-recognition callback can always call latest version
   const handleFinalRef = useRef<(text: string) => void>(() => {});
@@ -90,7 +104,7 @@ export function useConversation(botName: string = 'Avneet'): UseConversationRetu
     const recognition = new SpeechRecognition();
     recognition.continuous      = false;
     recognition.interimResults  = true;
-    recognition.lang            = 'en-US';
+    recognition.lang            = 'en-US'; // overridden per-session in startListening
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
@@ -169,7 +183,7 @@ export function useConversation(botName: string = 'Avneet'): UseConversationRetu
       const res = await fetch('/api/chat', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ message: text, conversationHistory: history, botName }),
+        body:    JSON.stringify({ message: text, conversationHistory: history, botName, language }),
       });
 
       if (!res.ok) {
@@ -187,7 +201,7 @@ export function useConversation(botName: string = 'Avneet'): UseConversationRetu
       setStatus('responding');
       statusRef.current = 'responding';
 
-      await speak(reply, 'coral', 0.85, () => {
+      await speak(reply, 'marin', 0.85, () => {
         // onReady: fires right before first audio frame — add bubble now
         const finalMsgs = [...messagesRef.current, assistantMsg];
         messagesRef.current = finalMsgs;
@@ -218,6 +232,10 @@ export function useConversation(botName: string = 'Avneet'): UseConversationRetu
     stopSpeaking();
     setError(null);
     setInterim('');
+
+    // Set the correct recognition language for the active selection
+    const locale = LANG_LOCALE[languageRef.current] ?? 'en-US';
+    recognitionRef.current.lang = locale;
 
     try {
       recognitionRef.current.start();

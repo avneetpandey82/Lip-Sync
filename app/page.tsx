@@ -82,7 +82,17 @@ function ThinkingDots() {
 
 /* ─── Page ────────────────────────────────────────────────────────────── */
 export default function HomePage() {
-  const [botName, setBotName] = useState('Avneet');
+  const [botName,  setBotName]  = useState('Avneet');
+  const [language, setLanguage] = useState('English');
+
+  const LANGUAGES = [
+    { value: 'English',  label: '🇬🇧 English'  },
+    { value: 'French',   label: '🇫🇷 French'    },
+    { value: 'Spanish',  label: '🇪🇸 Spanish'   },
+    { value: 'Hindi',    label: '🇮🇳 Hindi'     },
+    { value: 'Hinglish', label: '🤝 Hinglish'  },
+    { value: 'Slang',    label: '🔥 Slang'     },
+  ];
 
   const {
     messages,
@@ -97,7 +107,7 @@ export default function HomePage() {
     stopListening,
     interrupt,
     clearHistory,
-  } = useConversation(botName);
+  } = useConversation(botName, language);
 
   // Auto-scroll chat to latest message
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -135,25 +145,58 @@ export default function HomePage() {
           <span className="text-white font-semibold text-sm mt-0.5">{botName || 'Avneet'}</span>
         </div>
 
-        {/* Inline name editor */}
-        <div className="flex items-center gap-2.5">
-          <label htmlFor="bot-name"
-                 className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-medium whitespace-nowrap">
-            Companion name
-          </label>
-          <input
-            id="bot-name"
-            type="text"
-            value={botName}
-            onChange={(e) => setBotName(e.target.value)}
-            onBlur={(e) => { if (!e.target.value.trim()) setBotName('Avneet'); }}
-            maxLength={24}
-            placeholder="Avneet"
-            className="bg-white/5 border border-white/10 text-white text-sm rounded-lg
-                       px-3 py-1.5 w-36 placeholder-gray-600
-                       focus:outline-none focus:border-indigo-500/60 focus:bg-white/[0.07]
-                       transition-colors"
-          />
+        {/* Controls row: name + language */}
+        <div className="flex items-center gap-4">
+
+          {/* Name input */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="bot-name"
+                   className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-medium whitespace-nowrap">
+              Name
+            </label>
+            <input
+              id="bot-name"
+              type="text"
+              value={botName}
+              onChange={(e) => setBotName(e.target.value)}
+              onBlur={(e) => { if (!e.target.value.trim()) setBotName('Avneet'); }}
+              maxLength={24}
+              placeholder="Avneet"
+              className="bg-white/5 border border-white/10 text-white text-sm rounded-lg
+                         px-3 py-1.5 w-32 placeholder-gray-600
+                         focus:outline-none focus:border-indigo-500/60 focus:bg-white/[0.07]
+                         transition-colors"
+            />
+          </div>
+
+          {/* Divider */}
+          <div className="w-px h-5 bg-white/10" />
+
+          {/* Language dropdown */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="bot-lang"
+                   className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-medium whitespace-nowrap">
+              Language
+            </label>
+            <select
+              id="bot-lang"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="bg-[#12192e] border border-white/10 text-white text-sm rounded-lg
+                         px-3 py-1.5 pr-8 appearance-none cursor-pointer
+                         focus:outline-none focus:border-indigo-500/60
+                         transition-colors"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 10px center',
+              }}
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>{l.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
