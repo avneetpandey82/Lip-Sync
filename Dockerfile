@@ -11,7 +11,10 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --legacy-peer-deps
+# BuildKit cache mount: npm package cache persists between builds even when
+# package.json changes, so only changed packages are re-downloaded.
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --prefer-offline
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Stage 2 — builder
