@@ -11,7 +11,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --prefer-offline
+RUN npm i --legacy-peer-deps --production
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Stage 2 — builder
@@ -42,6 +42,14 @@ RUN npm run build
 # ────────────────────────────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 
+# Build-time metadata injected by GitHub Actions
+ARG GIT_BRANCH=local
+ARG GIT_SHA=unknown
+
+LABEL org.opencontainers.image.source="https://github.com/avneetpandey82/lip-sync" \
+    org.opencontainers.image.revision="${GIT_SHA}" \
+    org.opencontainers.image.ref.name="${GIT_BRANCH}"
+
 RUN apk add --no-cache libc6-compat
 
 WORKDIR /app
@@ -51,7 +59,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Security: run as non-root user
 RUN addgroup --system --gid 1001 nodejs \
- && adduser  --system --uid 1001 nextjs
+    && adduser  --system --uid 1001 nextjs
 
 # Copy the standalone server bundle (contains its own node_modules subset)
 COPY --from=builder /app/.next/standalone ./
