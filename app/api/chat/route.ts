@@ -95,49 +95,69 @@ export async function POST(req: Request) {
 
     const systemPrompt = languageInstructions[language] ?? languageInstructions['English'];
 
-    // Build messages array with conversation history
-    const messages: any[] = [
-      {
-        role: 'system',
-        content: systemPrompt,
-      },
-      ...conversationHistory,
-      {
-        role: 'user',
-        content: message
-      }
+    // Build input array — system prompt goes in `instructions`, history + user msg in `input`
+    // Role mapping: 'system' → not used in input array (goes to instructions)
+    const inputMessages = [
+      ...conversationHistory
+        .filter((m: any) => m.role !== 'system')
+        .map(({ role, content }: any) => ({ role, content })),
+      { role: 'user', content: message },
     ];
-
-    // Stream the AI response token-by-token so the client can render text
-    // progressively and start TTS as soon as the full text is ready.
-    // gpt-4o-mini: confirmed Chat Completions streaming support, fast, cheap.
-    const stream = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages,
-      stream: true,
-      temperature: 0.8,
-      max_tokens: 280,
-    });
 
     const encoder = new TextEncoder();
 
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of stream) {
-            const token = chunk.choices[0]?.delta?.content ?? '';
-            if (token) {
-              console.log(`[stream] token: "${token}"`);
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ token })}\n\n`)
-              );
+          // Responses API — correct API for gpt-5-mini (reasoning model)
+          const stream = await openai.responses.create({
+            model: 'gpt-5-mini',
+            instructions: systemPrompt,
+            input: inputMessages,
+            stream: true,
+            reasoning: { effort: 'low' },  // minimize reasoning tokens so reply tokens remain
+            max_output_tokens: 2048,        // high enough to cover reasoning + reply
+            tools: [{ type: 'web_search_preview' }], // auto-searches for news, weather, current events
+          } as any);
+
+          let flushedItems = new Set<string>();
+          let deltaEmitted = false;
+
+          for await (const event of stream as any) {
+            // Primary: streaming text deltas
+            if (
+              event.type === 'response.output_text.delta' ||
+              event.type === 'response.text.delta'
+            ) {
+              const token: string = event.delta ?? '';
+              if (token) {
+                deltaEmitted = true;
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ token })}\n\n`)
+                );
+              }
+            }
+            // Fallback: only send full text if NO deltas were emitted at all
+            else if (event.type === 'response.output_item.done' && !deltaEmitted) {
+              const item = event.item;
+              if (item?.type === 'message' && !flushedItems.has(item.id) && Array.isArray(item.content)) {
+                for (const part of item.content) {
+                  const text: string = part.text ?? part.transcript ?? '';
+                  if (text) {
+                    flushedItems.add(item.id);
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ token: text })}\n\n`)
+                    );
+                  }
+                }
+              }
             }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        } catch (e) {
-          console.error('[stream] error:', e);
+        } catch (e: any) {
+          console.error('Stream error:', e?.message ?? e);
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`)
+            encoder.encode(`data: ${JSON.stringify({ error: e?.message ?? 'Stream error' })}\n\n`)
           );
         } finally {
           controller.close();

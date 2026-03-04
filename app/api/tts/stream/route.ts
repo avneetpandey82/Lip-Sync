@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 
 export async function POST(req: Request) {
   try {
-    const { text, voice = 'coral', speed = 1.0 } = await req.json();
+    const { text, voice = 'marin', speed = 1.0 } = await req.json();
 
     if (!text || typeof text !== 'string') {
       return NextResponse.json(

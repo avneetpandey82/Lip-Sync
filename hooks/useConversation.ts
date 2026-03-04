@@ -198,51 +198,87 @@ export function useConversation(botName: string = 'Avneet', language: string = '
       let fullText      = '';
       let bubbleAdded   = false;
 
-      // Sentence-pipeline: queue sentences as they arrive so TTS can start
-      // on the first sentence while the rest of the text is still streaming.
-      let   sentenceQueue: string[]  = [];
-      let   ttsActive                = false;
-      let   streamDone               = false;
+      // ── TTS pre-fetch helper ────────────────────────────────────────────
+      // Fetches and buffers PCM audio for a sentence in the background.
+      // Returns a Promise<ArrayBuffer> that resolves once the audio is fully
+      // downloaded — speak() consumes it via the preFetchedBuffer shortcut,
+      // skipping the network round-trip and eliminating inter-sentence gaps.
+      const prefetchTTS = (sentence: string): Promise<ArrayBuffer> =>
+        fetch('/api/tts/stream', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ text: sentence, voice: 'marin', speed: 0.85 }),
+        }).then(async (res) => {
+          if (!res.ok || !res.body) throw new Error('TTS prefetch failed');
+          const reader = res.body.getReader();
+          const chunks: Uint8Array[] = [];
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+          }
+          // Inline concatenation so we don't need to import AudioManager here
+          const total  = chunks.reduce((s, c) => s + c.length, 0);
+          const merged = new Uint8Array(total);
+          let   offset = 0;
+          for (const c of chunks) { merged.set(c, offset); offset += c.length; }
+          return merged.buffer as ArrayBuffer;
+        });
 
-      // Drain the sentence queue one-by-one, chaining TTS calls.
+      // Sentence pipeline — each entry holds the text AND a pre-fetch Promise
+      // that starts the moment the sentence is complete (not when we play it).
+      type QueuedSentence = { text: string; audioProm: Promise<ArrayBuffer> };
+      let sentenceQueue: QueuedSentence[] = [];
+      let ttsActive                       = false;
+      let streamDone                      = false;
+
+      // Drain: plays each sentence back-to-back.
+      // Because each audioProm starts fetching the moment the sentence is
+      // enqueued, by the time the previous sentence finishes playing the next
+      // buffer is almost always already in memory → gap ≈ 0 ms.
       const drainQueue = async () => {
-        if (ttsActive) return; // another drain already running
+        if (ttsActive) return;
         ttsActive = true;
         while (sentenceQueue.length > 0) {
-          const sentence = sentenceQueue.shift()!;
-          // Set responding status on the very first TTS call
+          const { text: sentence, audioProm } = sentenceQueue.shift()!;
           if (statusRef.current !== 'responding') {
             setStatus('responding');
             statusRef.current = 'responding';
           }
-          await speak(sentence, 'marin', 0.85);
+          try {
+            const buffer = await audioProm; // already buffered ─ near-instant
+            await speak(sentence, 'marin', 0.85, undefined, buffer);
+            // speak() now AWAITS audio end (playPCM resolves on onended)
+            // so the next iteration only starts once this sentence finishes.
+          } catch (e) {
+            console.warn('[drainQueue] sentence TTS failed, skipping:', e);
+          }
         }
-        // If streaming is still going, wait for more sentences
         if (!streamDone) { ttsActive = false; return; }
-        // Streaming finished — flush any remainder that didn't end with punctuation
-        const remainder = fullText.replace(/^[\s\S]*[.!?]\s*/m, '').trim();
-        // (already spoken in flush step below when streamDone fires)
         ttsActive = false;
       };
 
-      // Helper: extract complete sentences from fullText that haven't been spoken
+      // Helper: find newly-completed sentences, immediately kick off TTS pre-fetch
       let spokenUpTo = 0;
       const flushSentences = (force = false) => {
-        const unspoken = fullText.slice(spokenUpTo);
-        // Match sentence-ending punctuation boundaries
-        const sentenceRe = /[^.!?]*[.!?]+(?:\s|$)/g;
+        const unspoken    = fullText.slice(spokenUpTo);
+        const sentenceRe  = /[^.!?]*[.!?]+(?:\s|$)/g;
         let match: RegExpExecArray | null;
-        let lastMatchEnd = 0;
+        let lastMatchEnd  = 0;
         while ((match = sentenceRe.exec(unspoken)) !== null) {
           const sentence = match[0].trim();
-          if (sentence) sentenceQueue.push(sentence);
+          if (sentence) {
+            // Start TTS network fetch NOW — while previous sentence still plays
+            sentenceQueue.push({ text: sentence, audioProm: prefetchTTS(sentence) });
+          }
           lastMatchEnd = match.index + match[0].length;
         }
         spokenUpTo += lastMatchEnd;
-        // On force-flush (stream done), speak any trailing fragment
         if (force) {
           const trailing = fullText.slice(spokenUpTo).trim();
-          if (trailing) sentenceQueue.push(trailing);
+          if (trailing) {
+            sentenceQueue.push({ text: trailing, audioProm: prefetchTTS(trailing) });
+          }
           spokenUpTo = fullText.length;
         }
         drainQueue();

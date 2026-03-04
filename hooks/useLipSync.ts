@@ -165,10 +165,11 @@ export function useLipSync() {
    *                  with the moment audio begins, eliminating perceived latency.
    */
   const speak = async (
-    text:     string,
-    voice:    string = 'coral',
-    speed:    number = 1.0,
-    onReady?: () => void,
+    text:            string,
+    voice:           string = 'coral',
+    speed:           number = 1.0,
+    onReady?:        () => void,
+    preFetchedBuffer?: ArrayBuffer,   // pre-loaded PCM — skips TTS network fetch
   ) => {
     if (!audioManagerRef.current) {
       setError('Audio manager not initialized');
@@ -183,58 +184,72 @@ export function useLipSync() {
       // Initialize audio context (requires user interaction)
       await audioManagerRef.current.init();
       
-      // Step 1: Start TTS stream AND pre-fetch phonemes with a rough duration
-      // estimate — both requests fly in parallel so we don't wait for audio
-      // to finish before starting the phoneme request.
-      setProgress('Streaming audio from OpenAI...');
+      // Step 1: Obtain audio buffer — either from pre-fetch or fresh TTS request.
+      // When drainQueue pre-fetches the next sentence while the current plays,
+      // preFetchedBuffer is already resolved, making the gap near-zero.
+      let fullAudioBuffer: ArrayBuffer;
 
-      // Rough estimate: average English speech is ~130 words/min = ~2.17 words/sec
-      const wordCount     = text.trim().split(/\s+/).length;
-      const roughDuration = Math.max(1, wordCount / 2.17);
+      if (preFetchedBuffer) {
+        // ── Pre-fetched path: buffer already in memory, no network wait ──────
+        setProgress('Using pre-fetched audio...');
+        fullAudioBuffer = preFetchedBuffer;
 
-      // Fire TTS and phoneme requests concurrently
-      const [ttsResponse] = await Promise.all([
-        fetch('/api/tts/stream', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ text, voice, speed }),
-        }),
-        // Prime phonemes with rough duration — will be corrected after download
-        getEstimatedPhonemes(text, roughDuration),
-      ]);
-      
-      if (!ttsResponse.ok) {
-        const errorData = await ttsResponse.json();
-        throw new Error(errorData.error || 'TTS request failed');
-      }
-      
-      // Step 2: Stream audio into memory
-      setProgress('Buffering audio...');
-      const reader = ttsResponse.body?.getReader();
-      if (!reader) throw new Error('No response body');
-      
-      const chunks: Uint8Array[] = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-      }
-      
-      const fullAudioBuffer = AudioManager.concatenateChunks(chunks);
-      audioBufferRef.current = fullAudioBuffer;
-      setHasAudio(true);
+        audioBufferRef.current = fullAudioBuffer;
+        setHasAudio(true);
 
-      // Extract amplitude envelope immediately — used in rAF loop to modulate jaw
-      amplitudeEnvelopeRef.current = AudioManager.extractAmplitudeEnvelope(
-        fullAudioBuffer, AMPLITUDE_FPS,
-      );
-      
-      // Step 3: Correct phoneme timing with the ACTUAL audio duration.
-      // Re-fetch only if the rough estimate was off by more than 10%.
-      const actualDuration = AudioManager.estimateDuration(fullAudioBuffer);
-      const durationError  = Math.abs(actualDuration - roughDuration) / actualDuration;
-      if (durationError > 0.10) {
+        amplitudeEnvelopeRef.current = AudioManager.extractAmplitudeEnvelope(
+          fullAudioBuffer, AMPLITUDE_FPS,
+        );
+
+        // Estimate phonemes from actual duration of the pre-fetched buffer
+        const actualDuration = AudioManager.estimateDuration(fullAudioBuffer);
         await getEstimatedPhonemes(text, actualDuration);
+      } else {
+        // ── Fresh fetch path: stream TTS + phonemes concurrently ─────────────
+        setProgress('Streaming audio from OpenAI...');
+
+        const wordCount     = text.trim().split(/\s+/).length;
+        const roughDuration = Math.max(1, wordCount / 2.17);
+
+        const [ttsResponse] = await Promise.all([
+          fetch('/api/tts/stream', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ text, voice, speed }),
+          }),
+          getEstimatedPhonemes(text, roughDuration),
+        ]);
+
+        if (!ttsResponse.ok) {
+          const errorData = await ttsResponse.json();
+          throw new Error(errorData.error || 'TTS request failed');
+        }
+
+        setProgress('Buffering audio...');
+        const reader = ttsResponse.body?.getReader();
+        if (!reader) throw new Error('No response body');
+
+        const chunks: Uint8Array[] = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+
+        fullAudioBuffer = AudioManager.concatenateChunks(chunks);
+        audioBufferRef.current = fullAudioBuffer;
+        setHasAudio(true);
+
+        amplitudeEnvelopeRef.current = AudioManager.extractAmplitudeEnvelope(
+          fullAudioBuffer, AMPLITUDE_FPS,
+        );
+
+        // Correct phoneme timing with actual audio duration if rough estimate was off
+        const actualDuration = AudioManager.estimateDuration(fullAudioBuffer);
+        const durationError  = Math.abs(actualDuration - roughDuration) / actualDuration;
+        if (durationError > 0.10) {
+          await getEstimatedPhonemes(text, actualDuration);
+        }
       }
       
       // Step 4: Fire onReady BEFORE starting playback so any caller-side UI

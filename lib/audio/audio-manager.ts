@@ -53,26 +53,33 @@ export class AudioManager {
     source.buffer = audioBuffer;
     source.connect(this.audioContext.destination);
     
-    // Clear currentSource when audio ends and fire callback
-    source.onended = () => {
-      if (this.currentSource === source) {
-        this.currentSource = null;
-        console.log('Audio playback ended');
-      }
-      onEnded?.();
-    };
-    
     // Start audio immediately — a non-zero delay creates a window where the
     // viseme animation runs but no audio plays, causing early-viseme drift.
     const scheduleDelay = 0.0;
     const scheduledStartTime = this.audioContext.currentTime + scheduleDelay;
-    
+
+    // Wrap onended in a Promise so awaiting playPCM blocks until audio fully ends.
+    // This is the critical fix: callers that await playPCM now wait for the whole
+    // sentence to finish before starting the next one, eliminating word-skip gaps.
+    const endedPromise = new Promise<void>((resolve) => {
+      source.onended = () => {
+        if (this.currentSource === source) {
+          this.currentSource = null;
+          console.log('Audio playback ended');
+        }
+        onEnded?.();
+        resolve();
+      };
+    });
+
     // Track timing for lip-sync synchronization (use scheduled time, not actual)
     this.startTime = scheduledStartTime;
     this.currentSource = source;
     source.start(scheduledStartTime);
-    
+
     console.log(`Playing audio: ${audioBuffer.duration.toFixed(2)}s, Start time: ${this.startTime.toFixed(3)}s, Current time: ${this.audioContext.currentTime.toFixed(3)}s`);
+
+    return endedPromise;
   }
   
   /**

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useConversation } from "@/hooks/useConversation";
+import { MessageContent } from "@/components/MessageContent";
 
 const AvatarScene = dynamic(
   () => import("@/components/AvatarScene").then((mod) => mod.AvatarScene),
@@ -232,17 +233,17 @@ export default function HomePage() {
            style={{ background: "linear-gradient(to top, #0a0e1aee 60%, transparent)" }}>
 
         {/* Chat messages */}
-        <div className="w-full max-w-2xl px-4 mb-3 flex flex-col gap-2 max-h-52 overflow-y-auto scrollbar-hide">
+          <div className="w-full max-w-2xl px-4 mb-3 flex flex-col gap-2 max-h-72 overflow-y-auto scrollbar-hide">
           {visibleMessages.map((msg) => (
             <div key={msg.id}
                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`
-                max-w-[82%] px-4 py-2 rounded-2xl text-sm leading-snug
+                px-4 py-2.5 rounded-2xl text-sm leading-snug
                 ${msg.role === "user"
-                  ? "bg-indigo-600/80 text-white rounded-br-sm"
-                  : "bg-white/10 text-gray-100 rounded-bl-sm backdrop-blur-sm border border-white/5"}
+                  ? "max-w-[72%] bg-indigo-600/80 text-white rounded-br-sm"
+                  : "max-w-[92%] bg-white/10 text-gray-100 rounded-bl-sm backdrop-blur-sm border border-white/5"}
               `}>
-                {msg.content}
+                <MessageContent content={msg.content} role={msg.role} />
               </div>
             </div>
           ))}
