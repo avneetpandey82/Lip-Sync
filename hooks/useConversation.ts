@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLipSync } from './useLipSync';
+import { getFingerprint } from '@/lib/fingerprint';
 
 export type ConversationStatus = 'idle' | 'listening' | 'thinking' | 'responding';
 
@@ -20,6 +21,7 @@ export interface UseConversationReturn {
   currentViseme: string;
   nextViseme: string;
   mouthAmplitude: number;
+  remaining: number | null;   // null = not yet known
   startListening: () => void;
   stopListening: () => void;
   interrupt: () => void;
@@ -37,17 +39,19 @@ export interface UseConversationReturn {
  * Status machine:
  *   idle → listening → thinking → responding → idle
  */
-export function useConversation(botName: string = 'Avneet', language: string = 'English'): UseConversationReturn {
+export function useConversation(botName: string = 'Avneet', language: string = 'English', roastMode: boolean = false): UseConversationReturn {
   const [messages, setMessages]             = useState<Message[]>([]);
   const [status, setStatus]                 = useState<ConversationStatus>('idle');
   const [interimTranscript, setInterim]     = useState('');
   const [error, setError]                   = useState<string | null>(null);
   const [isSupported, setIsSupported]       = useState(false);
+  const [remaining, setRemaining]           = useState<number | null>(null);
 
   // Stable ref copies ─ safe to read inside callbacks without stale closures
   const statusRef   = useRef<ConversationStatus>('idle');
   const messagesRef = useRef<Message[]>([]);
   const languageRef = useRef<string>(language);
+  const roastModeRef = useRef<boolean>(roastMode);
 
   // BCP-47 locale map — used to set recognition.lang before each session
   const LANG_LOCALE: Record<string, string> = {
@@ -61,9 +65,13 @@ export function useConversation(botName: string = 'Avneet', language: string = '
 
   // Keep languageRef in sync whenever the prop changes
   useEffect(() => { languageRef.current = language; }, [language]);
+  useEffect(() => { roastModeRef.current = roastMode; }, [roastMode]);
 
   // Pipeline handle ref so speech-recognition callback can always call latest version
   const handleFinalRef = useRef<(text: string) => void>(() => {});
+
+  // Set to true by interrupt() — drainQueue checks this to abort mid-sentence
+  const interruptedRef = useRef(false);
 
   const recognitionRef = useRef<any>(null);
 
@@ -77,13 +85,25 @@ export function useConversation(botName: string = 'Avneet', language: string = '
   // ── Keep refs in sync ─────────────────────────────────────────────────────
   useEffect(() => { statusRef.current = status; }, [status]);
 
-  // ── Transition responding → idle when TTS finishes ───────────────────────
+  // ── Transition responding → listening when TTS finishes ─────────────────
   useEffect(() => {
     if (statusRef.current === 'responding' && !isPlaying && !isFetching) {
-      // Small guard: only flip to idle if we haven't already moved to another state
       const timer = setTimeout(() => {
-        if (statusRef.current === 'responding') setStatus('idle');
-      }, 120); // 120 ms debounce avoids flicker on the isFetching→isPlaying handoff
+        if (statusRef.current === 'responding' && !interruptedRef.current) {
+          // Auto-restart the mic so the user can reply immediately
+          setStatus('idle');
+          statusRef.current = 'idle';
+          if (recognitionRef.current) {
+            const locale = LANG_LOCALE[languageRef.current] ?? 'en-US';
+            recognitionRef.current.lang = locale;
+            try { recognitionRef.current.start(); } catch (_) {}
+          }
+        } else if (statusRef.current === 'responding') {
+          // Was interrupted — just go idle, don't restart mic
+          setStatus('idle');
+          statusRef.current = 'idle';
+        }
+      }, 120);
       return () => clearTimeout(timer);
     }
   }, [isPlaying, isFetching]);
@@ -160,6 +180,9 @@ export function useConversation(botName: string = 'Avneet', language: string = '
   const handleFinalTranscript = useCallback(async (text: string) => {
     if (!text) return;
 
+    // Reset interrupt flag for this new pipeline run
+    interruptedRef.current = false;
+
     // If avatar is mid-speech, interrupt it
     stopSpeaking();
 
@@ -183,13 +206,21 @@ export function useConversation(botName: string = 'Avneet', language: string = '
       const res = await fetch('/api/chat', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ message: text, conversationHistory: history, botName, language }),
+        body:    JSON.stringify({ message: text, conversationHistory: history, botName, language, roastMode: roastModeRef.current, fingerprint: getFingerprint() }),
       });
 
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
+        if (res.status === 429) {
+          setRemaining(0);
+          throw new Error(data.details || 'Message limit reached');
+        }
         throw new Error(data.error || `Chat failed (${res.status})`);
       }
+
+      // Read remaining count from response headers
+      const rem = res.headers.get('X-RateLimit-Remaining');
+      if (rem !== null) setRemaining(Number(rem));
 
       // ── Stream tokens from SSE ─────────────────────────────────────────
       // Uses a line-buffer so SSE events split across read() chunks are
@@ -240,6 +271,11 @@ export function useConversation(botName: string = 'Avneet', language: string = '
         if (ttsActive) return;
         ttsActive = true;
         while (sentenceQueue.length > 0) {
+          // Stop immediately if user interrupted
+          if (interruptedRef.current) {
+            sentenceQueue = [];
+            break;
+          }
           const { text: sentence, audioProm } = sentenceQueue.shift()!;
           if (statusRef.current !== 'responding') {
             setStatus('responding');
@@ -247,6 +283,8 @@ export function useConversation(botName: string = 'Avneet', language: string = '
           }
           try {
             const buffer = await audioProm; // already buffered ─ near-instant
+            // Check again after async buffer resolution
+            if (interruptedRef.current) { sentenceQueue = []; break; }
             await speak(sentence, 'marin', 0.85, undefined, buffer);
             // speak() now AWAITS audio end (playPCM resolves on onended)
             // so the next iteration only starts once this sentence finishes.
@@ -403,6 +441,7 @@ export function useConversation(botName: string = 'Avneet', language: string = '
   }, []);
 
   const interrupt = useCallback(() => {
+    interruptedRef.current = true;  // signals drainQueue to stop after current sentence
     stopSpeaking();
     if (statusRef.current === 'listening') {
       try { recognitionRef.current?.stop(); } catch (_) {}
@@ -426,6 +465,7 @@ export function useConversation(botName: string = 'Avneet', language: string = '
     currentViseme,
     nextViseme,
     mouthAmplitude,
+    remaining,
     startListening,
     stopListening,
     interrupt,

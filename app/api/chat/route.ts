@@ -2,15 +2,30 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { checkRateLimit } from '@/lib/rate-limiter';
 
 export async function POST(req: Request) {
   try {
-    const { message, conversationHistory = [], botName = 'Avneet', language = 'English' } = await req.json();
+    const { message, conversationHistory = [], botName = 'Avneet', language = 'English', roastMode = false, fingerprint = 'unknown' } = await req.json();
 
     if (!message || typeof message !== 'string') {
       return NextResponse.json(
         { error: 'Missing or invalid message parameter' },
         { status: 400 }
+      );
+    }
+
+    // ── Rate limit check ──────────────────────────────────────────────────
+    const rateLimit = checkRateLimit(fingerprint);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Message limit reached',
+          details: `You have used all ${rateLimit.limit} free messages. Please contact the developer to continue.`,
+          rateLimitExceeded: true,
+          limit: rateLimit.limit,
+        },
+        { status: 429 }
       );
     }
 
@@ -93,7 +108,14 @@ export async function POST(req: Request) {
         `If someone asks about recent stuff and you lowkey don't have the tea on it, be real — say your training has a cutoff, spill what you know, and tell them to fact-check with a live source, no cap.`,
     };
 
-    const systemPrompt = languageInstructions[language] ?? languageInstructions['English'];
+    const basePrompt = languageInstructions[language] ?? languageInstructions['English'];
+
+    // Roast modifier — layered on top of any language personality
+    const roastModifier = roastMode
+      ? ` ADDITIONALLY, you must ALWAYS open every single response with a sharp, funny roast of the person's question — mock their curiosity, their obvious cluelessness, or their life choices with wit and comedic timing. Then give the real answer. Format strictly: roast first (1 punchy sentence with emoji), answer second. Be savage but not hateful — punch the question, not the person.`
+      : '';
+
+    const systemPrompt = basePrompt + roastModifier;
 
     // Build input array — system prompt goes in `instructions`, history + user msg in `input`
     // Role mapping: 'system' → not used in input array (goes to instructions)
@@ -170,7 +192,9 @@ export async function POST(req: Request) {
         'Content-Type':  'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection':    'keep-alive',
-        'X-Accel-Buffering': 'no', // disable nginx buffering in prod
+        'X-Accel-Buffering': 'no',
+        'X-RateLimit-Remaining': String(rateLimit.remaining),
+        'X-RateLimit-Limit':     String(rateLimit.limit),
       },
     });
     

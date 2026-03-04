@@ -356,6 +356,8 @@ export function useLipSync() {
    * Stop current playback
    */
   const stop = () => {
+    // Synchronously update the ref so the rAF animation loop halts this frame
+    isPlayingRef.current = false;
     audioManagerRef.current?.stop();
     setIsFetching(false);
     setIsPlaying(false);

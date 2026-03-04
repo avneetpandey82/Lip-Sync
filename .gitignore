@@ -27,6 +27,9 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# rate limit data (device usage tracking — do not commit)
+.rate-limit.json
+
 # vercel
 .vercel
 
