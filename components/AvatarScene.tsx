@@ -193,9 +193,9 @@ export function AvatarScene({ currentViseme, nextViseme, isPlaying, mouthAmplitu
       style={{ background: "#0d1220", position: "relative" }}
     >
       <Canvas
-        /* Camera looks at face center — avatar is auto-shifted so head is at y≈0 */
-        camera={{ position: [0, 0.05, 2.0], fov: 28, near: 0.1, far: 50 }}
-        onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
+        /* Camera shifted down so the avatar appears higher in the viewport */
+        camera={{ position: [0, -0.18, 2.0], fov: 28, near: 0.1, far: 50 }}
+        onCreated={({ camera }) => camera.lookAt(0, -0.18, 0)}
         shadows
         gl={{
           antialias:           true,

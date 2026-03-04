@@ -28,6 +28,16 @@ export async function POST(req: Request) {
     
     console.log(`Chat request: "${message.slice(0, 50)}..."`);
     
+    // Knowledge-cutoff transparency clause added to every language prompt.
+    // When the user asks about recent events, the AI explains WHY it may not
+    // know (training cutoff) instead of silently giving outdated or no info.
+    const knowledgeCutoff =
+      `If asked about events, products, or developments you might not have data on, ` +
+      `be transparent: briefly explain that your training knowledge has a cutoff and ` +
+      `newer information may exist, then share everything you do know up to that point ` +
+      `and suggest the user verify the latest details from a live source. ` +
+      `Never pretend to know current information you cannot have.`;
+
     // Per-language personality & instruction layer
     const languageInstructions: Record<string, string> = {
       English:
@@ -35,28 +45,32 @@ export async function POST(req: Request) {
         `Always respond in clear, natural English. ` +
         `You can answer any topic — science, history, culture, advice, facts, small-talk — with depth and warmth. ` +
         `Keep spoken responses to 2-4 sentences so they sound natural aloud. ` +
-        `Refer to yourself as ${botName}.`,
+        `Refer to yourself as ${botName}. ` +
+        knowledgeCutoff,
 
       French:
         `Tu es un(e) compagnon(ne) IA chaleureux/chaleureuse prénommé(e) ${botName}. ` +
         `Réponds TOUJOURS exclusivement en français naturel et courant. ` +
         `Tu peux répondre à n'importe quel sujet — sciences, histoire, culture, conseils, faits, petite conversation — avec profondeur et bienveillance. ` +
         `Limite tes réponses à 2-4 phrases pour qu'elles sonnent naturellement à l'oral. ` +
-        `Présente-toi comme ${botName}.`,
+        `Présente-toi comme ${botName}. ` +
+        `Si on te pose des questions sur des événements récents, explique brièvement que tes données d'entraînement ont une date limite et que des informations plus récentes peuvent exister — partage ce que tu sais et invite à vérifier les dernières actualités.`,
 
       Spanish:
         `Eres un(a) cálido/a compañero/a IA llamado/a ${botName}. ` +
         `Responde SIEMPRE únicamente en español natural y fluido. ` +
         `Puedes responder sobre cualquier tema — ciencia, historia, cultura, consejos, datos, charla informal — con profundidad y calidez. ` +
         `Limita tus respuestas a 2-4 oraciones para que suenen naturales al hablarlas en voz alta. ` +
-        `Preséntate como ${botName}.`,
+        `Preséntate como ${botName}. ` +
+        `Si te preguntan sobre eventos recientes, explica brevemente que tus datos de entrenamiento tienen fecha límite y que puede haber información más nueva — comparte lo que sabes y sugiere verificar fuentes actuales.`,
 
       Hindi:
         `आप एक गर्मजोशी से भरे AI साथी हैं जिनका नाम ${botName} है। ` +
         `हमेशा केवल स्वाभाविक, शुद्ध हिंदी में जवाब दें (देवनागरी लिपि में)। ` +
         `आप किसी भी विषय पर उत्तर दे सकते हैं — विज्ञान, इतिहास, संस्कृति, सलाह, तथ्य, या सामान्य बातचीत — गहराई और अपनापन के साथ। ` +
         `अपने उत्तर 2-4 वाक्यों तक सीमित रखें ताकि वे बोलने में स्वाभाविक लगें। ` +
-        `अपना परिचय ${botName} के रूप में दें।`,
+        `अपना परिचय ${botName} के रूप में दें। ` +
+        `यदि हाल की घटनाओं के बारे में पूछा जाए, तो स्पष्ट रूप से बताएं कि आपकी ट्रेनिंग की एक कट-ऑफ तारीख है और नई जानकारी उपलब्ध हो सकती है — जो आप जानते हैं वह बताएं और नवीनतम स्रोत से जांचने की सलाह दें।`,
 
       Hinglish:
         `You are a fun, friendly AI companion named ${botName}. ` +
@@ -65,7 +79,8 @@ export async function POST(req: Request) {
         `Mix Hindi words and English words freely and naturally within the same sentence. ` +
         `You can answer ANY topic — science, history, culture, advice, fun facts, gossip, anything — with warmth and energy. ` +
         `Keep responses to 2-4 sentences so they sound good spoken aloud. ` +
-        `Refer to yourself as ${botName}.`,
+        `Refer to yourself as ${botName}. ` +
+        `Agar koi recent events ke baare mein puche, toh honestly bolo ki teri training ka ek cutoff hai — jo pata hai woh bata, aur latest info ke liye unhe current sources check karne bol.`,
 
       Slang:
         `You are a chill, Gen-Z AI companion named ${botName}. ` +
@@ -74,7 +89,8 @@ export async function POST(req: Request) {
         `Use emojis naturally in text. ` +
         `You can answer absolutely ANY topic — science, history, pop culture, advice, drama, facts — just explain it in slang. ` +
         `Keep it to 2-4 sentences, spoken energy only. ` +
-        `Refer to yourself as ${botName}.`,
+        `Refer to yourself as ${botName}. ` +
+        `If someone asks about recent stuff and you lowkey don't have the tea on it, be real — say your training has a cutoff, spill what you know, and tell them to fact-check with a live source, no cap.`,
     };
 
     const systemPrompt = languageInstructions[language] ?? languageInstructions['English'];
@@ -91,20 +107,52 @@ export async function POST(req: Request) {
         content: message
       }
     ];
-    
-    // Get AI response
-    const completion = await openai.chat.completions.create({
+
+    // Stream the AI response token-by-token so the client can render text
+    // progressively and start TTS as soon as the full text is ready.
+    // gpt-4o-mini: confirmed Chat Completions streaming support, fast, cheap.
+    const stream = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages: messages,
+      messages,
+      stream: true,
       temperature: 0.8,
-      max_tokens: 220, // Enough to fully answer any question in 2-4 spoken sentences
+      max_tokens: 280,
     });
-    
-    const reply = completion.choices[0]?.message?.content || 'I apologize, I did not understand that.';
-    
-    console.log(`AI response: "${reply.slice(0, 50)}..."`);
-    
-    return NextResponse.json({ reply });
+
+    const encoder = new TextEncoder();
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            const token = chunk.choices[0]?.delta?.content ?? '';
+            if (token) {
+              console.log(`[stream] token: "${token}"`);
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ token })}\n\n`)
+              );
+            }
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        } catch (e) {
+          console.error('[stream] error:', e);
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`)
+          );
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type':  'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection':    'keep-alive',
+        'X-Accel-Buffering': 'no', // disable nginx buffering in prod
+      },
+    });
     
   } catch (error: any) {
     console.error('Chat error:', error);

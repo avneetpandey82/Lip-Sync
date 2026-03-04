@@ -186,29 +186,142 @@ export function useConversation(botName: string = 'Avneet', language: string = '
         body:    JSON.stringify({ message: text, conversationHistory: history, botName, language }),
       });
 
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `Chat failed (${res.status})`);
       }
 
-      const { reply } = await res.json();
+      // ── Stream tokens from SSE ─────────────────────────────────────────
+      // Uses a line-buffer so SSE events split across read() chunks are
+      // reassembled correctly before JSON parsing.
+      const assistantId = `a-${Date.now()}`;
+      let fullText      = '';
+      let bubbleAdded   = false;
 
-      // Prepare the assistant message but DO NOT add it to state yet.
-      // Instead, pass onReady to speak() so the bubble appears exactly
-      // when audio begins — eliminating the text-ahead-of-audio gap.
-      const assistantMsg: Message = { id: `a-${Date.now()}`, role: 'assistant', content: reply };
+      // Sentence-pipeline: queue sentences as they arrive so TTS can start
+      // on the first sentence while the rest of the text is still streaming.
+      let   sentenceQueue: string[]  = [];
+      let   ttsActive                = false;
+      let   streamDone               = false;
 
-      setStatus('responding');
-      statusRef.current = 'responding';
+      // Drain the sentence queue one-by-one, chaining TTS calls.
+      const drainQueue = async () => {
+        if (ttsActive) return; // another drain already running
+        ttsActive = true;
+        while (sentenceQueue.length > 0) {
+          const sentence = sentenceQueue.shift()!;
+          // Set responding status on the very first TTS call
+          if (statusRef.current !== 'responding') {
+            setStatus('responding');
+            statusRef.current = 'responding';
+          }
+          await speak(sentence, 'marin', 0.85);
+        }
+        // If streaming is still going, wait for more sentences
+        if (!streamDone) { ttsActive = false; return; }
+        // Streaming finished — flush any remainder that didn't end with punctuation
+        const remainder = fullText.replace(/^[\s\S]*[.!?]\s*/m, '').trim();
+        // (already spoken in flush step below when streamDone fires)
+        ttsActive = false;
+      };
 
-      await speak(reply, 'marin', 0.85, () => {
-        // onReady: fires right before first audio frame — add bubble now
-        const finalMsgs = [...messagesRef.current, assistantMsg];
-        messagesRef.current = finalMsgs;
-        setMessages([...finalMsgs]);
+      // Helper: extract complete sentences from fullText that haven't been spoken
+      let spokenUpTo = 0;
+      const flushSentences = (force = false) => {
+        const unspoken = fullText.slice(spokenUpTo);
+        // Match sentence-ending punctuation boundaries
+        const sentenceRe = /[^.!?]*[.!?]+(?:\s|$)/g;
+        let match: RegExpExecArray | null;
+        let lastMatchEnd = 0;
+        while ((match = sentenceRe.exec(unspoken)) !== null) {
+          const sentence = match[0].trim();
+          if (sentence) sentenceQueue.push(sentence);
+          lastMatchEnd = match.index + match[0].length;
+        }
+        spokenUpTo += lastMatchEnd;
+        // On force-flush (stream done), speak any trailing fragment
+        if (force) {
+          const trailing = fullText.slice(spokenUpTo).trim();
+          if (trailing) sentenceQueue.push(trailing);
+          spokenUpTo = fullText.length;
+        }
+        drainQueue();
+      };
+
+      const reader     = res.body.getReader();
+      const decoder    = new TextDecoder();
+      let   lineBuffer = ''; // accumulates incomplete SSE lines across read() calls
+
+      const processLine = (line: string) => {
+        if (!line.startsWith('data: ')) return false; // false = not done
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') return true; // true = stream ended
+
+        try {
+          const { token, error: streamErr } = JSON.parse(payload);
+          if (streamErr) throw new Error(streamErr as string);
+          if (!token) return false;
+
+          fullText += token;
+
+          // Show bubble on first token — update in-place on subsequent tokens
+          if (!bubbleAdded) {
+            bubbleAdded = true;
+            const assistantMsg: Message = { id: assistantId, role: 'assistant', content: fullText };
+            messagesRef.current = [...messagesRef.current, assistantMsg];
+            setMessages([...messagesRef.current]);
+          } else {
+            messagesRef.current = messagesRef.current.map(m =>
+              m.id === assistantId ? { ...m, content: fullText } : m
+            );
+            setMessages([...messagesRef.current]);
+          }
+
+          // Flush full sentences to TTS queue as they arrive
+          flushSentences();
+        } catch (_) { /* malformed SSE line — skip */ }
+        return false;
+      };
+
+      // Read until stream is exhausted
+      let readerDone = false;
+      while (!readerDone) {
+        const { done, value } = await reader.read();
+        if (done) { readerDone = true; break; }
+
+        lineBuffer += decoder.decode(value, { stream: true });
+        const lines = lineBuffer.split('\n');
+        lineBuffer  = lines.pop() ?? ''; // keep incomplete trailing fragment
+
+        let finished = false;
+        for (const line of lines) {
+          if (processLine(line)) { finished = true; break; }
+        }
+        if (finished) break;
+      }
+
+      // Process any leftover buffered data
+      if (lineBuffer) processLine(lineBuffer);
+
+      // ── Stream done — flush remaining text and wait for TTS to finish ───
+      streamDone = true;
+      flushSentences(true); // force-flush any trailing fragment
+
+      // Ensure responding status is set even if no sentences were queued
+      if (!bubbleAdded) {
+        setStatus('idle');
+        statusRef.current = 'idle';
+      }
+
+      // Wait for the TTS drain to fully finish (in case it's still running)
+      // by yielding — the drain loop checks streamDone and will complete.
+      await new Promise<void>(resolve => {
+        const check = () => {
+          if (!ttsActive && sentenceQueue.length === 0) { resolve(); }
+          else setTimeout(check, 50);
+        };
+        check();
       });
-      // NOTE: speak() returns once audio STARTS playing.
-      // The responding→idle transition is handled by the isPlaying/isFetching useEffect above.
 
     } catch (err) {
       console.error('[useConversation] pipeline error:', err);
