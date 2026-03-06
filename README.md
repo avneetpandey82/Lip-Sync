@@ -158,10 +158,18 @@ lip-sync/
 
 ### Environment variables
 
+Required variables for all deployment modes:
+
 ```env
 # Required
 OPENAI_API_KEY=sk-...
+
+# Optional
+RHUBARB_AVAILABLE=false          # Set to "true" if Rhubarb binary is available
+RHUBARB_PATH=/path/to/rhubarb    # Custom path (defaults to lib/rhubarb/rhubarb)
 ```
+
+Create `.env.local` for local development or `.env` for Docker deployments. See `.env.example` for a template.
 
 ### OpenAI models
 
