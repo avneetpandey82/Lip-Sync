@@ -7,6 +7,8 @@ A real-time, voice-driven conversational AI avatar with accurate lip-sync, power
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)
 ![Three.js](https://img.shields.io/badge/Three.js-0.170-orange)
 ![React](https://img.shields.io/badge/React-19-61dafb)
+![Docker](https://img.shields.io/badge/Docker-Hub-2496ED?logo=docker&logoColor=white)
+![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)
 
 ## ¯ Features
 
@@ -19,8 +21,9 @@ A real-time, voice-driven conversational AI avatar with accurate lip-sync, power
 - **Look-Ahead Blending** â€” next queued viseme bleeds 20 % into the current frame for organic transition feel
 - **Interrupt & Continue** â€” tap the mic button mid-response to interrupt the avatar and speak immediately
 - **Conversation History** â€” rolling 10-message context sent to GPT for coherent multi-turn dialogue
-- **Zero Python** â€” pure Node.js / TypeScript stack, no native add-ons required
-
+- **Zero Python** â€” pure Node.js / TypeScript stack, no native add-ons required- **Docker Support** — multi-stage optimized builds with automatic CI/CD via GitHub Actions
+- **Production Ready** — deploy to Vercel, Azure App Service, or any Docker-compatible platform
+- **Pre-built Images** — ready-to-use Docker images available on Docker Hub
 ## —ï¸ Architecture
 
 ```
