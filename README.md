@@ -10,7 +10,30 @@ A real-time, voice-driven conversational AI avatar with accurate lip-sync, power
 ![Docker](https://img.shields.io/badge/Docker-Hub-2496ED?logo=docker&logoColor=white)
 ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=githubactions&logoColor=white)
 
-## ¯ Features
+## 📑 Table of Contents
+
+- [Features](#-features)
+- [Architecture](#-architecture)
+- [Quick Links](#-quick-links)
+- [Prerequisites](#-prerequisites)
+- [Quick Start](#-quick-start)
+- [Project Structure](#-project-structure)
+- [Configuration](#-configuration)
+- [Lip-Sync Pipeline Detail](#-lip-sync-pipeline-detail)
+- [UI Behaviour](#-ui-behaviour)
+- [Deployment](#-deployment)
+  - [Local Development](#local-development)
+  - [Docker (Local)](#docker-local)
+  - [Docker Hub (Pre-built Image)](#docker-hub-pre-built-image)
+  - [Azure App Service](#azure-app-service)
+  - [Vercel](#vercel)
+- [CI/CD](#-cicd)
+- [Troubleshooting](#-troubleshooting)
+- [Tech Stack](#-tech-stack)
+- [License](#-license)
+- [Acknowledgments](#-acknowledgments)
+
+## ✨ Features
 
 - **Real-Time Voice Conversation** â€” speak to the avatar using your microphone; it listens, thinks, and replies with synced speech
 - **Streaming TTS** â€” OpenAI `gpt-4o-mini-tts` streams PCM audio for minimal latency
@@ -24,6 +47,7 @@ A real-time, voice-driven conversational AI avatar with accurate lip-sync, power
 - **Zero Python** â€” pure Node.js / TypeScript stack, no native add-ons required- **Docker Support** — multi-stage optimized builds with automatic CI/CD via GitHub Actions
 - **Production Ready** — deploy to Vercel, Azure App Service, or any Docker-compatible platform
 - **Pre-built Images** — ready-to-use Docker images available on Docker Hub
+
 ## —ï¸ Architecture
 
 ```
@@ -52,7 +76,13 @@ Mic â†’ Web Speech API (interim + final transcript)
                   Background Rhubarb refinement (if binary present)
 ```
 
-## “‹ Prerequisites
+## 🔗 Quick Links
+
+- **GitHub Repository**: [avneetpandey82/lip-sync](https://github.com/avneetpandey82/lip-sync)
+- **Docker Hub**: [avneetpandey82/lip-sync](https://hub.docker.com/r/avneetpandey82/lip-sync)
+- **Quick Deploy**: Pull and run with `docker pull avneetpandey82/lip-sync:latest`
+
+## 📋 Prerequisites
 
 - **Node.js 18+**
 - **OpenAI API key** with access to `gpt-4o-mini` and `gpt-4o-mini-tts`
@@ -410,17 +440,17 @@ The workflow automatically publishes images in the format:
 
 ## › Troubleshooting
 
-| Symptom                         | Fix                                                                                             |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| "OpenAI API key not configured" | Check `.env.local` or `.env` and restart dev server / container                                 |
-| Mic button does nothing         | Use Chrome or Edge; grant microphone permission                                                 |
-| Avatar not loading              | Add `public/avatar.glb` (Ready Player Me export with Morph Targets)                             |
+| Symptom                         | Fix                                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| "OpenAI API key not configured" | Check `.env.local` or `.env` and restart dev server / container                               |
+| Mic button does nothing         | Use Chrome or Edge; grant microphone permission                                               |
+| Avatar not loading              | Add `public/avatar.glb` (Ready Player Me export with Morph Targets)                           |
 | Mouth stays closed              | Open browser DevTools → verify `mouthOpen`/`mouthSmile` morph targets are present in your GLB |
-| Rhubarb not running             | Check binary path `lib/rhubarb/rhubarb(.exe)` and execute permission                            |
-| No audio                        | HTTPS required in production; click mic to initialise AudioContext                              |
-| Docker build fails              | Clear Docker build cache: `docker builder prune --all`                                          |
-| Container exits immediately     | Check logs: `docker-compose logs` or `docker logs lip-sync-avatar`                              |
-| 502 Bad Gateway (Azure)         | Check App Service logs; verify `WEBSITES_PORT=3000` is set                                      |
+| Rhubarb not running             | Check binary path `lib/rhubarb/rhubarb(.exe)` and execute permission                          |
+| No audio                        | HTTPS required in production; click mic to initialise AudioContext                            |
+| Docker build fails              | Clear Docker build cache: `docker builder prune --all`                                        |
+| Container exits immediately     | Check logs: `docker-compose logs` or `docker logs lip-sync-avatar`                            |
+| 502 Bad Gateway (Azure)         | Check App Service logs; verify `WEBSITES_PORT=3000` is set                                    |
 
 ---
 
