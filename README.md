@@ -28,6 +28,7 @@ A real-time, voice-driven conversational AI avatar with accurate lip-sync, power
   - [Azure App Service](#azure-app-service)
   - [Vercel](#vercel)
 - [CI/CD](#-cicd)
+- [Security & Best Practices](#-security--best-practices)
 - [Troubleshooting](#-troubleshooting)
 - [Tech Stack](#-tech-stack)
 - [Development](#-development)
@@ -472,6 +473,7 @@ The workflow automatically publishes images in the format:
 ### Rate Limiting
 
 The project includes basic rate limiting in `lib/rate-limiter.ts`. Consider implementing additional protection for production:
+
 - API route rate limiting
 - Per-user conversation limits
 - OpenAI API cost caps
