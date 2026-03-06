@@ -409,12 +409,15 @@ The workflow automatically publishes images in the format:
 
 | Symptom                         | Fix                                                                                             |
 | ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| "OpenAI API key not configured" | Check `.env.local` and restart dev server                                                       |
+| "OpenAI API key not configured" | Check `.env.local` or `.env` and restart dev server / container                                 |
 | Mic button does nothing         | Use Chrome or Edge; grant microphone permission                                                 |
 | Avatar not loading              | Add `public/avatar.glb` (Ready Player Me export with Morph Targets)                             |
-| Mouth stays closed              | Open browser DevTools â†’ verify `mouthOpen`/`mouthSmile` morph targets are present in your GLB |
+| Mouth stays closed              | Open browser DevTools → verify `mouthOpen`/`mouthSmile` morph targets are present in your GLB |
 | Rhubarb not running             | Check binary path `lib/rhubarb/rhubarb(.exe)` and execute permission                            |
 | No audio                        | HTTPS required in production; click mic to initialise AudioContext                              |
+| Docker build fails              | Clear Docker build cache: `docker builder prune --all`                                          |
+| Container exits immediately     | Check logs: `docker-compose logs` or `docker logs lip-sync-avatar`                              |
+| 502 Bad Gateway (Azure)         | Check App Service logs; verify `WEBSITES_PORT=3000` is set                                      |
 
 ---
 
@@ -428,7 +431,8 @@ The workflow automatically publishes images in the format:
 | Lip-sync     | Rhubarb Lip Sync (optional binary) + CMU G2P estimator  |
 | Audio        | Web Audio API (PCM playback + RMS envelope)             |
 | Styling      | Tailwind CSS 4                                          |
-| Deployment   | Vercel                                                  |
+| Deployment   | Vercel, Docker, Azure App Service                       |
+| CI/CD        | GitHub Actions (automated Docker Hub publishing)        |
 
 ---
 
