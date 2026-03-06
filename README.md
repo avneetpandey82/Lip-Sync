@@ -261,7 +261,111 @@ Vowel duration multipliers from ARPAbet stress markers:
 
 ## € Deployment
 
+### Local Development
+
+```bash
+npm run dev
+```
+
+Open http://localhost:3000
+
+---
+
+### Docker (Local)
+
+Build and run with Docker Compose:
+
+```bash
+# Create .env file with your OpenAI API key
+echo "OPENAI_API_KEY=sk-..." > .env
+
+# Build and start container
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop container
+docker-compose down
+```
+
+The app will be available at http://localhost:3000
+
+**Optional**: To enable Rhubarb in Docker, add the Linux binary to `lib/rhubarb/rhubarb` before building, then set `RHUBARB_AVAILABLE=true` in your `.env` file.
+
+---
+
+### Docker Hub (Pre-built Image)
+
+Pull and run the latest image from Docker Hub:
+
+```bash
+docker pull avneetpandey82/lip-sync:latest
+
+docker run -d \
+  -p 3000:3000 \
+  -e OPENAI_API_KEY=sk-... \
+  -e RHUBARB_AVAILABLE=false \
+  --name lip-sync-avatar \
+  avneetpandey82/lip-sync:latest
+```
+
+The image is automatically built and published on every push via GitHub Actions.
+
+---
+
+### Azure App Service
+
+Deploy as a containerized web app:
+
+#### 1. Create App Service
+
+```bash
+az group create --name lip-sync-rg --location eastus
+
+az appservice plan create \
+  --name lip-sync-plan \
+  --resource-group lip-sync-rg \
+  --is-linux \
+  --sku B1
+
+az webapp create \
+  --name lip-sync-avatar \
+  --resource-group lip-sync-rg \
+  --plan lip-sync-plan \
+  --deployment-container-image-name avneetpandey82/lip-sync:latest
+```
+
+#### 2. Configure Environment
+
+```bash
+az webapp config appsettings set \
+  --resource-group lip-sync-rg \
+  --name lip-sync-avatar \
+  --settings \
+    OPENAI_API_KEY=sk-... \
+    RHUBARB_AVAILABLE=false \
+    WEBSITES_PORT=3000
+```
+
+#### 3. Enable Continuous Deployment
+
+Configure webhook for automatic updates when new Docker images are pushed:
+
+```bash
+az webapp deployment container config \
+  --enable-cd true \
+  --resource-group lip-sync-rg \
+  --name lip-sync-avatar
+```
+
+Your app will be available at `https://lip-sync-avatar.azurewebsites.net`
+
+---
+
 ### Vercel
+
+Deploy serverless to Vercel:
 
 ```bash
 npm i -g vercel
@@ -269,9 +373,35 @@ vercel env add OPENAI_API_KEY
 vercel --prod
 ```
 
-`vercel.json` is pre-configured with a 30-second function timeout for TTS streaming.
+`vercel.json` is pre-configured with:
 
-> **Rhubarb on Vercel**: Download the **Linux** binary, commit it as `lib/rhubarb/rhubarb`. Without it the system falls back to the CMU estimator automatically.
+- 30-second function timeout for TTS streaming
+- `RHUBARB_AVAILABLE=false` (Vercel serverless functions don't support binaries by default)
+
+> **Note**: Rhubarb binary is not available in Vercel's serverless environment. The system automatically falls back to the CMU phoneme estimator.
+
+---
+
+## 🔄 CI/CD
+
+The project includes a GitHub Actions workflow (`.github/workflows/docker-publish.yml`) that:
+
+- **Triggers** on every branch push and pull request
+- **Builds** multi-stage Docker image with BuildKit cache
+- **Pushes** to Docker Hub (branch name as tag + `latest` for main branch)
+- **Injects** git branch and SHA into image labels
+- **Caches** layers in GitHub Actions for faster rebuilds
+
+**Required GitHub Secrets:**
+
+- `DOCKERHUB_USERNAME` - Your Docker Hub username
+- `DOCKERHUB_TOKEN` - Docker Hub access token
+
+The workflow automatically publishes images in the format:
+
+- `avneetpandey82/lip-sync:main` (main branch)
+- `avneetpandey82/lip-sync:feature-name` (feature branches)
+- `avneetpandey82/lip-sync:latest` (latest main build)
 
 ---
 
