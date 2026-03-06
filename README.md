@@ -30,6 +30,7 @@ A real-time, voice-driven conversational AI avatar with accurate lip-sync, power
 - [CI/CD](#-cicd)
 - [Troubleshooting](#-troubleshooting)
 - [Tech Stack](#-tech-stack)
+- [Development](#-development)
 - [License](#-license)
 - [Acknowledgments](#-acknowledgments)
 
@@ -89,7 +90,11 @@ Mic â†’ Web Speech API (interim + final transcript)
 - **Chrome or Edge** browser (Web Speech API for microphone input)
 - _(Optional)_ Rhubarb Lip Sync binary for higher-accuracy phoneme refinement
 
-## € Quick Start
+## 🚀 Quick Start
+
+> **Quick Deploy**: For immediate deployment, use the pre-built Docker image: `docker pull avneetpandey82/lip-sync:latest`. See [Docker Hub deployment](#docker-hub-pre-built-image) for details.
+
+This guide covers local development with Node.js. For Docker deployment, see the [Deployment](#-deployment) section.
 
 ### 1. Install dependencies
 
@@ -438,7 +443,42 @@ The workflow automatically publishes images in the format:
 
 ---
 
-## › Troubleshooting
+## 🔒 Security & Best Practices
+
+### Environment Variables
+
+- **Never commit** `.env.local` or `.env` files to version control
+- Use `.env.example` as a template for required variables
+- In production, use platform-specific secret management:
+  - **Vercel**: Use Vercel environment variables
+  - **Azure**: Use App Service Application Settings
+  - **Docker**: Pass via `-e` flag or use secrets management
+
+### API Key Security
+
+- Rotate OpenAI API keys regularly
+- Use separate keys for development and production
+- Monitor API usage in OpenAI dashboard
+- Set spending limits to prevent unexpected charges
+
+### HTTPS & CORS
+
+- Production deployments **require HTTPS** for:
+  - Web Speech API (microphone access)
+  - Web Audio API
+  - Service Workers (if used)
+- CORS is handled automatically by Next.js API routes
+
+### Rate Limiting
+
+The project includes basic rate limiting in `lib/rate-limiter.ts`. Consider implementing additional protection for production:
+- API route rate limiting
+- Per-user conversation limits
+- OpenAI API cost caps
+
+---
+
+## 🛠️ Troubleshooting
 
 | Symptom                         | Fix                                                                                           |
 | ------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -469,7 +509,55 @@ The workflow automatically publishes images in the format:
 
 ---
 
-## “„ License
+## 🛠️ Development
+
+### Local Development
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server with hot reload
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
+
+# Lint code
+npm run lint
+```
+
+### Docker Development
+
+```bash
+# Build image locally
+docker build -t lip-sync-avatar .
+
+# Run with docker-compose (recommended)
+docker-compose up --build
+
+# Run standalone container
+docker run -p 3000:3000 \
+  -e OPENAI_API_KEY=sk-... \
+  lip-sync-avatar
+```
+
+### Environment Setup
+
+1. Copy `.env.example` to `.env.local` (for local dev) or `.env` (for Docker)
+2. Add your OpenAI API key
+3. Optionally add Rhubarb binary to `lib/rhubarb/` for enhanced lip-sync accuracy
+
+### Debug Route
+
+Visit `/debug/avatar` to test avatar rendering and morph targets without the full conversation interface.
+
+---
+
+## 📄 License
 
 MIT â€” free to use in personal and commercial projects.
 
